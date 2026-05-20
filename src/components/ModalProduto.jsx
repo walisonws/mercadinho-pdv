@@ -3,7 +3,7 @@ import { X, Package } from 'lucide-react'
 
 const categorias = ['mercearia', 'bebidas', 'frutas', 'verduras', 'carnes', 'frios', 'limpeza', 'higiene', 'outros']
 
-const vazio = { nome: '', codigo: '', tipo: 'unidade', preco: '', categoria: 'mercearia' }
+const vazio = { nome: '', codigo: '', tipo: 'unidade', preco: '', categoria: 'mercearia', estoque: '0', estoqueMinimo: '0' }
 
 export default function ModalProduto({ produto, onSalvar, onFechar }) {
   const [form, setForm] = useState(produto ? {
@@ -12,6 +12,8 @@ export default function ModalProduto({ produto, onSalvar, onFechar }) {
     tipo: produto.tipo,
     preco: String(produto.preco),
     categoria: produto.categoria,
+    estoque: String(produto.estoque ?? 0),
+    estoqueMinimo: String(produto.estoqueMinimo ?? 0),
   } : vazio)
 
   const [erros, setErros] = useState({})
@@ -35,6 +37,8 @@ export default function ModalProduto({ produto, onSalvar, onFechar }) {
     onSalvar({
       ...form,
       preco: parseFloat(form.preco),
+      estoque: parseInt(form.estoque) || 0,
+      estoqueMinimo: parseInt(form.estoqueMinimo) || 0,
     })
   }
 
@@ -108,6 +112,29 @@ export default function ModalProduto({ produto, onSalvar, onFechar }) {
               className={`w-full border-2 rounded-xl px-4 py-2.5 focus:outline-none focus:border-green-500 ${erros.preco ? 'border-red-400' : 'border-gray-200'}`}
             />
             {erros.preco && <p className="text-red-500 text-xs mt-1">{erros.preco}</p>}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Estoque atual</label>
+              <input
+                type="number"
+                value={form.estoque}
+                onChange={e => set('estoque', e.target.value)}
+                placeholder="0"
+                className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-green-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Alerta de estoque mínimo</label>
+              <input
+                type="number"
+                value={form.estoqueMinimo}
+                onChange={e => set('estoqueMinimo', e.target.value)}
+                placeholder="0"
+                className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-green-500"
+              />
+            </div>
           </div>
 
           <div>

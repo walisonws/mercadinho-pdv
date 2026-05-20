@@ -6,6 +6,7 @@ import Produtos from './pages/Produtos'
 import Historico from './pages/Historico'
 import Dashboard from './pages/Dashboard'
 import Configuracoes from './pages/Configuracoes'
+import Reposicao from './pages/Reposicao'
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
             <Routes>
               <Route path="/" element={<PDV />} />
               <Route path="/produtos" element={<Produtos />} />
+              <Route path="/reposicao" element={<Reposicao />} />
               <Route path="/historico" element={<Historico />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/configuracoes" element={<Configuracoes />} />

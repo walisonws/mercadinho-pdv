@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Search, Edit2, Trash2, Scale, Tag, Filter } from 'lucide-react'
+import { Plus, Search, Edit2, Trash2, Scale, Tag, Filter, AlertTriangle } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import ModalProduto from '../components/ModalProduto'
 
@@ -107,6 +107,7 @@ export default function Produtos() {
                 <th className="px-4 py-3">Código</th>
                 <th className="px-4 py-3">Tipo</th>
                 <th className="px-4 py-3">Preço</th>
+                <th className="px-4 py-3">Estoque</th>
                 <th className="px-4 py-3">Categoria</th>
                 <th className="px-4 py-3 text-center">Ações</th>
               </tr>
@@ -138,6 +139,15 @@ export default function Produtos() {
                     <span className="font-bold text-green-700">
                       R$ {p.preco.toFixed(2)}{p.tipo === 'peso' ? '/kg' : ''}
                     </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    {p.estoqueMinimo > 0 && p.estoque <= p.estoqueMinimo ? (
+                      <span className="flex items-center gap-1 text-xs font-semibold text-red-600 bg-red-50 px-2 py-1 rounded-full w-fit">
+                        <AlertTriangle size={11} /> {p.estoque} — baixo
+                      </span>
+                    ) : (
+                      <span className="text-sm text-gray-700 font-medium">{p.estoque ?? 0}</span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <span className="capitalize text-sm text-gray-600">{p.categoria}</span>
