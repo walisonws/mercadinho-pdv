@@ -83,11 +83,36 @@ export default function Reposicao() {
     setItemConfirmando(null)
   }
 
-  function handleConcluir(lista) {
-    const naoComprados = lista.itens.filter(i => !i.comprado).length
-    if (naoComprados > 0) {
-      if (!window.confirm(`Ainda há ${naoComprados} item(ns) não marcado(s). Deseja concluir mesmo assim?`)) return
+  async function handleConcluir(lista) {
+    const naoComprados = lista.itens.filter(i => !i.comprado)
+
+    if (naoComprados.length > 0) {
+      // Encontra itens que têm produto correspondente no catálogo
+      const itensComProduto = naoComprados
+        .map(item => {
+          const prod = produtos.find(p => p.ativo && p.nome.toLowerCase() === item.nome.toLowerCase())
+          return { item, prod }
+        })
+        .filter(({ prod }) => !!prod)
+
+      const semProduto = naoComprados.length - itensComProduto.length
+      let msg = `Ainda há ${naoComprados.length} item(ns) não marcado(s).`
+      if (itensComProduto.length > 0) msg += `\n\n✓ ${itensComProduto.length} item(ns) terão o estoque atualizado automaticamente.`
+      if (semProduto > 0) msg += `\n⚠ ${semProduto} item(ns) sem produto cadastrado não atualizarão o estoque.`
+      msg += '\n\nDeseja concluir?'
+
+      if (!window.confirm(msg)) return
+
+      for (const { item, prod } of itensComProduto) {
+        await marcarItemComprado(lista.id, item.id, {
+          resolucao: 'mesmo_produto',
+          produtoId: prod.id,
+          quantidadeComprada: parseFloat(item.quantidade) || 0,
+          precoComprado: prod.preco,
+        })
+      }
     }
+
     concluirLista(lista.id)
     setExpandida(null)
   }
