@@ -28,6 +28,7 @@ const fromDbProduto = p => ({
   id: p.id, nome: p.nome, codigo: p.codigo, tipo: p.tipo,
   preco: p.preco, categoria: p.categoria, ativo: p.ativo,
   estoque: p.estoque, estoqueMinimo: p.estoque_minimo,
+  codigosAlternativos: p.codigos_alternativos || [],
 })
 
 const toDbProduto = (p, lojaId) => ({
@@ -236,7 +237,26 @@ export function AppProvider({ children }) {
   }
 
   function buscarPorCodigo(codigo) {
-    return produtos.find(p => p.codigo === codigo && p.ativo)
+    return produtos.find(p => p.ativo && (
+      p.codigo === codigo || (p.codigosAlternativos || []).includes(codigo)
+    ))
+  }
+
+  async function adicionarCodigoAlternativo(produtoId, codigo) {
+    let atualizado
+    setProdutos(prev => prev.map(p => {
+      if (p.id !== produtoId) return p
+      const alts = [...new Set([...(p.codigosAlternativos || []), codigo])]
+      atualizado = { ...p, codigosAlternativos: alts }
+      return atualizado
+    }))
+    if (supabase && atualizado) {
+      try {
+        await supabase.from('pdv_produtos')
+          .update({ codigos_alternativos: atualizado.codigosAlternativos })
+          .eq('id', produtoId)
+      } catch { /* coluna pode não existir ainda no supabase */ }
+    }
   }
 
   function buscarPorNome(termo) {
@@ -385,6 +405,7 @@ export function AppProvider({ children }) {
       atualizarEstoque,
       buscarPorCodigo,
       buscarPorNome,
+      adicionarCodigoAlternativo,
       registrarVenda,
       salvarConfig,
       criarLista,

@@ -3,6 +3,7 @@ import { Search, Trash2, Plus, Minus, ShoppingCart, AlertCircle, CheckCircle, Sc
 import { useApp } from '../context/AppContext'
 import ModalPeso from '../components/ModalPeso'
 import ModalFinalizarVenda from '../components/ModalFinalizarVenda'
+import ModalVincularCodigo from '../components/ModalVincularCodigo'
 
 const CATEGORIAS_EMOJI = {
   mercearia: '🛒', bebidas: '🥤', frutas: '🍎', verduras: '🥦',
@@ -10,7 +11,7 @@ const CATEGORIAS_EMOJI = {
 }
 
 export default function PDV() {
-  const { buscarPorCodigo, buscarPorNome, registrarVenda, config } = useApp()
+  const { buscarPorCodigo, buscarPorNome, registrarVenda, config, adicionarCodigoAlternativo } = useApp()
   const [busca, setBusca] = useState('')
   const [sugestoes, setSugestoes] = useState([])
   const [carrinho, setCarrinho] = useState([])
@@ -18,6 +19,7 @@ export default function PDV() {
   const [mostrarFinalizar, setMostrarFinalizar] = useState(false)
   const [vendaConfirmada, setVendaConfirmada] = useState(null)
   const [erro, setErro] = useState('')
+  const [codigoDesconhecido, setCodigoDesconhecido] = useState(null)
   const inputRef = useRef(null)
 
   const total = carrinho.reduce((acc, item) => acc + item.total, 0)
@@ -51,7 +53,8 @@ export default function PDV() {
           adicionarAoCarrinho(porNome[0])
           setBusca('')
         } else {
-          setErro(`Produto "${codigo}" não encontrado. Cadastre-o na aba Produtos.`)
+          setCodigoDesconhecido(codigo)
+          setBusca('')
         }
       }
     }
@@ -283,6 +286,26 @@ export default function PDV() {
           </div>
         </div>
       </div>
+
+      {/* Modal vincular código desconhecido */}
+      {codigoDesconhecido && (
+        <ModalVincularCodigo
+          codigo={codigoDesconhecido}
+          onVincular={async (produto) => {
+            await adicionarCodigoAlternativo(produto.id, codigoDesconhecido)
+            adicionarAoCarrinho(produto)
+            setCodigoDesconhecido(null)
+          }}
+          onCadastrarNovo={() => {
+            setCodigoDesconhecido(null)
+            setErro(`Código "${codigoDesconhecido}" não encontrado. Cadastre o produto na aba Produtos.`)
+          }}
+          onFechar={() => {
+            setCodigoDesconhecido(null)
+            inputRef.current?.focus()
+          }}
+        />
+      )}
 
       {/* Modal peso */}
       {produtoPeso && (
