@@ -69,14 +69,17 @@ export function imprimirCupom(venda, config = {}) {
 </body>
 </html>`
 
-  const win = window.open('', '_blank', 'width=350,height=500,toolbar=0,menubar=0,scrollbars=0')
-  if (!win) {
-    alert('Permita pop-ups neste site para imprimir o cupom.')
-    return
-  }
-  win.document.write(html)
-  win.document.close()
-  win.focus()
-  win.onafterprint = () => win.close()
-  win.print()
+  const iframe = document.createElement('iframe')
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:none;opacity:0;'
+  document.body.appendChild(iframe)
+
+  const doc = iframe.contentWindow.document
+  doc.open()
+  doc.write(html)
+  doc.close()
+
+  iframe.contentWindow.focus()
+  iframe.contentWindow.print()
+
+  setTimeout(() => document.body.removeChild(iframe), 3000)
 }
