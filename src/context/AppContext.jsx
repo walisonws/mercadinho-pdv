@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { v4 as uuidv4 } from 'uuid'
+import { supabase } from '../lib/supabase'
 
 const AppContext = createContext()
 
@@ -8,6 +9,7 @@ const STORAGE_KEYS = {
   vendas: 'pdv_vendas',
   config: 'pdv_config',
   listas: 'pdv_listas',
+  lojaId: 'pdv_loja_id',
 }
 
 const produtosPadrao = [
@@ -21,18 +23,52 @@ const produtosPadrao = [
   { id: uuidv4(), nome: 'Presunto (kg)', codigo: '2000000000003', tipo: 'peso', preco: 28.00, categoria: 'frios', ativo: true, estoque: 4, estoqueMinimo: 2 },
 ]
 
+// ── Mappers Supabase ↔ App ────────────────────────────────
+const fromDbProduto = p => ({
+  id: p.id, nome: p.nome, codigo: p.codigo, tipo: p.tipo,
+  preco: p.preco, categoria: p.categoria, ativo: p.ativo,
+  estoque: p.estoque, estoqueMinimo: p.estoque_minimo,
+})
+
+const toDbProduto = (p, lojaId) => ({
+  id: p.id, loja_id: lojaId, nome: p.nome, codigo: p.codigo,
+  tipo: p.tipo, preco: p.preco, categoria: p.categoria,
+  ativo: p.ativo ?? true, estoque: p.estoque ?? 0,
+  estoque_minimo: p.estoqueMinimo ?? 0,
+})
+
+const fromDbVenda = v => ({
+  id: v.id, itens: v.itens, total: v.total, pagamento: v.pagamento,
+  valorRecebido: v.valor_recebido, troco: v.troco, data: v.data,
+})
+
+const toDbVenda = (v, lojaId) => ({
+  id: v.id, loja_id: lojaId, itens: v.itens, total: v.total,
+  pagamento: v.pagamento, valor_recebido: v.valorRecebido ?? null,
+  troco: v.troco ?? null, data: v.data,
+})
+
+const fromDbLista = l => ({
+  id: l.id, nome: l.nome, status: l.status, itens: l.itens,
+  dataCriacao: l.data_criacao, dataConclusao: l.data_conclusao,
+})
+
+const toDbLista = (l, lojaId) => ({
+  id: l.id, loja_id: lojaId, nome: l.nome, status: l.status,
+  itens: l.itens, data_criacao: l.dataCriacao,
+  data_conclusao: l.dataConclusao ?? null,
+})
+
 export function AppProvider({ children }) {
+  const [lojaId, setLojaId] = useState(() => {
+    let id = localStorage.getItem(STORAGE_KEYS.lojaId)
+    if (!id) { id = uuidv4(); localStorage.setItem(STORAGE_KEYS.lojaId, id) }
+    return id
+  })
+
   const [produtos, setProdutos] = useState(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.produtos)
-    if (saved) {
-      const parsed = JSON.parse(saved)
-      // migrar produtos antigos sem campo estoque
-      return parsed.map(p => ({
-        estoque: p.estoque ?? 0,
-        estoqueMinimo: p.estoqueMinimo ?? 0,
-        ...p,
-      }))
-    }
+    if (saved) return JSON.parse(saved).map(p => ({ estoque: 0, estoqueMinimo: 0, ...p }))
     return produtosPadrao
   })
 
@@ -43,11 +79,7 @@ export function AppProvider({ children }) {
 
   const [config, setConfig] = useState(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.config)
-    return saved ? JSON.parse(saved) : {
-      nomeMercadinho: 'Meu Mercadinho',
-      endereco: '',
-      telefone: '',
-    }
+    return saved ? JSON.parse(saved) : { nomeMercadinho: 'Meu Mercadinho', endereco: '', telefone: '' }
   })
 
   const [listas, setListas] = useState(() => {
@@ -55,34 +87,152 @@ export function AppProvider({ children }) {
     return saved ? JSON.parse(saved) : []
   })
 
+  const [sincStatus, setSincStatus] = useState('idle') // 'idle' | 'sincronizando' | 'ok' | 'erro'
+
+  // ── Persistência localStorage ─────────────────────────────
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.produtos, JSON.stringify(produtos)) }, [produtos])
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.vendas, JSON.stringify(vendas)) }, [vendas])
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.config, JSON.stringify(config)) }, [config])
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.listas, JSON.stringify(listas)) }, [listas])
 
+  // ── Supabase: carrega dados e inscreve realtime ───────────
+  useEffect(() => {
+    if (!supabase) return
+    carregarDoSupabase(lojaId)
+    const channel = configurarRealtime(lojaId)
+    return () => { supabase.removeChannel(channel) }
+  }, [lojaId])
+
+  async function carregarDoSupabase(lid) {
+    setSincStatus('sincronizando')
+    try {
+      const [pRes, vRes, cRes, lRes] = await Promise.all([
+        supabase.from('pdv_produtos').select('*').eq('loja_id', lid),
+        supabase.from('pdv_vendas').select('*').eq('loja_id', lid).order('data', { ascending: false }),
+        supabase.from('pdv_config').select('*').eq('loja_id', lid).maybeSingle(),
+        supabase.from('pdv_listas').select('*').eq('loja_id', lid),
+      ])
+
+      if (pRes.data?.length > 0) {
+        setProdutos(pRes.data.map(fromDbProduto))
+        setVendas((vRes.data || []).map(fromDbVenda))
+        if (cRes.data) setConfig({
+          nomeMercadinho: cRes.data.nome_mercadinho || 'Meu Mercadinho',
+          endereco: cRes.data.endereco || '',
+          telefone: cRes.data.telefone || '',
+        })
+        setListas((lRes.data || []).map(fromDbLista))
+      } else {
+        await enviarParaSupabase(lid)
+      }
+      setSincStatus('ok')
+    } catch {
+      setSincStatus('erro')
+    }
+  }
+
+  async function enviarParaSupabase(lid) {
+    const p = JSON.parse(localStorage.getItem(STORAGE_KEYS.produtos) || '[]')
+    const v = JSON.parse(localStorage.getItem(STORAGE_KEYS.vendas) || '[]')
+    const c = JSON.parse(localStorage.getItem(STORAGE_KEYS.config) || '{}')
+    const l = JSON.parse(localStorage.getItem(STORAGE_KEYS.listas) || '[]')
+    await Promise.all([
+      p.length && supabase.from('pdv_produtos').upsert(p.map(pr => toDbProduto(pr, lid))),
+      v.length && supabase.from('pdv_vendas').upsert(v.map(ve => toDbVenda(ve, lid))),
+      supabase.from('pdv_config').upsert({
+        loja_id: lid,
+        nome_mercadinho: c.nomeMercadinho || 'Meu Mercadinho',
+        endereco: c.endereco || '',
+        telefone: c.telefone || '',
+      }),
+      l.length && supabase.from('pdv_listas').upsert(l.map(li => toDbLista(li, lid))),
+    ])
+  }
+
+  function configurarRealtime(lid) {
+    return supabase
+      .channel(`pdv-sync-${lid}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pdv_produtos', filter: `loja_id=eq.${lid}` },
+        ({ eventType, new: n, old: o }) => {
+          if (eventType === 'DELETE') {
+            setProdutos(prev => prev.filter(p => p.id !== o.id))
+          } else {
+            const p = fromDbProduto(n)
+            setProdutos(prev => {
+              const idx = prev.findIndex(x => x.id === p.id)
+              if (idx >= 0) { const next = [...prev]; next[idx] = p; return next }
+              return [...prev, p]
+            })
+          }
+        })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pdv_vendas', filter: `loja_id=eq.${lid}` },
+        ({ new: n }) => {
+          const v = fromDbVenda(n)
+          setVendas(prev => prev.find(x => x.id === v.id) ? prev : [v, ...prev])
+        })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pdv_listas', filter: `loja_id=eq.${lid}` },
+        ({ eventType, new: n, old: o }) => {
+          if (eventType === 'DELETE') {
+            setListas(prev => prev.filter(l => l.id !== o.id))
+          } else {
+            const l = fromDbLista(n)
+            setListas(prev => {
+              const idx = prev.findIndex(x => x.id === l.id)
+              if (idx >= 0) { const next = [...prev]; next[idx] = l; return next }
+              return [l, ...prev]
+            })
+          }
+        })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pdv_config', filter: `loja_id=eq.${lid}` },
+        ({ new: n }) => {
+          if (n) setConfig({
+            nomeMercadinho: n.nome_mercadinho || 'Meu Mercadinho',
+            endereco: n.endereco || '',
+            telefone: n.telefone || '',
+          })
+        })
+      .subscribe()
+  }
+
+  async function sincronizarComCodigo(novoCodigo) {
+    if (!supabase || !novoCodigo.trim()) return 'sem_supabase'
+    const { data } = await supabase.from('pdv_produtos').select('id').eq('loja_id', novoCodigo.trim()).limit(1)
+    if (!data?.length) return 'nao_encontrado'
+    localStorage.setItem(STORAGE_KEYS.lojaId, novoCodigo.trim())
+    setLojaId(novoCodigo.trim())
+    return 'ok'
+  }
+
   // ── Produtos ──────────────────────────────────────────────
-  function adicionarProduto(produto) {
-    setProdutos(prev => [...prev, {
-      estoque: 0,
-      estoqueMinimo: 0,
-      ...produto,
-      id: uuidv4(),
-      ativo: true,
-    }])
+  async function adicionarProduto(produto) {
+    const novo = { estoque: 0, estoqueMinimo: 0, ...produto, id: uuidv4(), ativo: true }
+    setProdutos(prev => [...prev, novo])
+    if (supabase) await supabase.from('pdv_produtos').insert(toDbProduto(novo, lojaId))
   }
 
-  function editarProduto(id, dados) {
-    setProdutos(prev => prev.map(p => p.id === id ? { ...p, ...dados } : p))
+  async function editarProduto(id, dados) {
+    let atualizado
+    setProdutos(prev => prev.map(p => {
+      if (p.id !== id) return p
+      atualizado = { ...p, ...dados }
+      return atualizado
+    }))
+    if (supabase && atualizado) {
+      await supabase.from('pdv_produtos').update(toDbProduto(atualizado, lojaId)).eq('id', id)
+    }
   }
 
-  function excluirProduto(id) {
+  async function excluirProduto(id) {
     setProdutos(prev => prev.filter(p => p.id !== id))
+    if (supabase) await supabase.from('pdv_produtos').delete().eq('id', id)
   }
 
-  function atualizarEstoque(id, quantidade) {
-    setProdutos(prev => prev.map(p =>
-      p.id === id ? { ...p, estoque: Math.max(0, (p.estoque || 0) + quantidade) } : p
-    ))
+  async function atualizarEstoque(id, delta) {
+    const produto = produtos.find(p => p.id === id)
+    if (!produto) return
+    const novoEstoque = Math.max(0, (produto.estoque || 0) + delta)
+    setProdutos(prev => prev.map(p => p.id === id ? { ...p, estoque: novoEstoque } : p))
+    if (supabase) await supabase.from('pdv_produtos').update({ estoque: novoEstoque }).eq('id', id)
   }
 
   function buscarPorCodigo(codigo) {
@@ -99,75 +249,78 @@ export function AppProvider({ children }) {
   )
 
   // ── Vendas ────────────────────────────────────────────────
-  function registrarVenda(venda) {
+  async function registrarVenda(venda) {
     const novaVenda = { ...venda, id: uuidv4(), data: new Date().toISOString() }
     setVendas(prev => [novaVenda, ...prev])
-    // debita estoque dos produtos por unidade
     venda.itens.forEach(item => {
-      if (item.tipo === 'unidade') {
-        atualizarEstoque(item.produtoId, -item.quantidade)
-      }
+      if (item.tipo === 'unidade') atualizarEstoque(item.produtoId, -item.quantidade)
     })
+    if (supabase) await supabase.from('pdv_vendas').insert(toDbVenda(novaVenda, lojaId))
     return novaVenda
   }
 
-  function salvarConfig(dados) {
+  async function salvarConfig(dados) {
     setConfig(prev => ({ ...prev, ...dados }))
+    if (supabase) await supabase.from('pdv_config').upsert({
+      loja_id: lojaId,
+      nome_mercadinho: dados.nomeMercadinho,
+      endereco: dados.endereco,
+      telefone: dados.telefone,
+    })
   }
 
   // ── Listas de Reposição ───────────────────────────────────
-  function criarLista(nome) {
-    const nova = {
-      id: uuidv4(),
-      nome,
-      dataCriacao: new Date().toISOString(),
-      status: 'aberta',
-      itens: [],
-    }
+  async function criarLista(nome) {
+    const nova = { id: uuidv4(), nome, dataCriacao: new Date().toISOString(), status: 'aberta', itens: [] }
     setListas(prev => [nova, ...prev])
+    if (supabase) await supabase.from('pdv_listas').insert(toDbLista(nova, lojaId))
     return nova
   }
 
-  function adicionarItemLista(listaId, item) {
-    setListas(prev => prev.map(l => l.id === listaId ? {
-      ...l,
-      itens: [...l.itens, { ...item, id: uuidv4(), comprado: false }],
-    } : l))
-  }
-
-  function removerItemLista(listaId, itemId) {
-    setListas(prev => prev.map(l => l.id === listaId ? {
-      ...l,
-      itens: l.itens.filter(i => i.id !== itemId),
-    } : l))
-  }
-
-  function marcarItemComprado(listaId, itemId, dados) {
-    // dados: { resolucao, quantidadeComprada, precoComprado, produtoId?, nomeProdutoNovo?, categoria? }
+  async function adicionarItemLista(listaId, item) {
+    let listaAtualizada
     setListas(prev => prev.map(l => {
       if (l.id !== listaId) return l
-      return {
-        ...l,
-        itens: l.itens.map(i => i.id === itemId ? {
-          ...i,
-          comprado: true,
-          ...dados,
-        } : i),
-      }
+      listaAtualizada = { ...l, itens: [...l.itens, { ...item, id: uuidv4(), comprado: false }] }
+      return listaAtualizada
+    }))
+    if (supabase && listaAtualizada) {
+      await supabase.from('pdv_listas').update({ itens: listaAtualizada.itens }).eq('id', listaId)
+    }
+  }
+
+  async function removerItemLista(listaId, itemId) {
+    let listaAtualizada
+    setListas(prev => prev.map(l => {
+      if (l.id !== listaId) return l
+      listaAtualizada = { ...l, itens: l.itens.filter(i => i.id !== itemId) }
+      return listaAtualizada
+    }))
+    if (supabase && listaAtualizada) {
+      await supabase.from('pdv_listas').update({ itens: listaAtualizada.itens }).eq('id', listaId)
+    }
+  }
+
+  async function marcarItemComprado(listaId, itemId, dados) {
+    let listaAtualizada
+    setListas(prev => prev.map(l => {
+      if (l.id !== listaId) return l
+      listaAtualizada = { ...l, itens: l.itens.map(i => i.id === itemId ? { ...i, comprado: true, ...dados } : i) }
+      return listaAtualizada
     }))
 
     if (dados.resolucao === 'mesmo_produto' && dados.produtoId) {
-      // Atualiza estoque e preço
-      setProdutos(prev => prev.map(p => p.id === dados.produtoId ? {
-        ...p,
-        estoque: (p.estoque || 0) + (dados.quantidadeComprada || 0),
-        preco: dados.precoComprado || p.preco,
-      } : p))
+      const produto = produtos.find(p => p.id === dados.produtoId)
+      if (produto) {
+        const novoEstoque = (produto.estoque || 0) + (dados.quantidadeComprada || 0)
+        const novoPreco = dados.precoComprado || produto.preco
+        setProdutos(prev => prev.map(p => p.id === dados.produtoId ? { ...p, estoque: novoEstoque, preco: novoPreco } : p))
+        if (supabase) await supabase.from('pdv_produtos').update({ estoque: novoEstoque, preco: novoPreco }).eq('id', dados.produtoId)
+      }
     }
 
     if (dados.resolucao === 'produto_novo') {
-      // Cadastra novo produto
-      adicionarProduto({
+      await adicionarProduto({
         nome: dados.nomeProdutoNovo,
         codigo: dados.codigoNovo || `2${Date.now()}`.slice(0, 13),
         tipo: dados.tipoNovo || 'unidade',
@@ -177,46 +330,48 @@ export function AppProvider({ children }) {
         estoqueMinimo: 0,
       })
     }
+
+    if (supabase && listaAtualizada) {
+      await supabase.from('pdv_listas').update({ itens: listaAtualizada.itens }).eq('id', listaId)
+    }
   }
 
-  function desmarcarItemComprado(listaId, itemId) {
+  async function desmarcarItemComprado(listaId, itemId) {
+    let listaAtualizada
     setListas(prev => prev.map(l => {
       if (l.id !== listaId) return l
-      return {
-        ...l,
-        itens: l.itens.map(i => i.id === itemId ? {
-          ...i,
-          comprado: false,
-          resolucao: undefined,
-          quantidadeComprada: undefined,
-          precoComprado: undefined,
-          produtoId: undefined,
+      listaAtualizada = {
+        ...l, itens: l.itens.map(i => i.id === itemId ? {
+          ...i, comprado: false,
+          resolucao: undefined, quantidadeComprada: undefined,
+          precoComprado: undefined, produtoId: undefined,
         } : i),
       }
+      return listaAtualizada
     }))
+    if (supabase && listaAtualizada) {
+      await supabase.from('pdv_listas').update({ itens: listaAtualizada.itens }).eq('id', listaId)
+    }
   }
 
-  function concluirLista(listaId) {
-    setListas(prev => prev.map(l => l.id === listaId ? {
-      ...l,
-      status: 'concluida',
-      dataConclusao: new Date().toISOString(),
-    } : l))
+  async function concluirLista(listaId) {
+    const dataConclusao = new Date().toISOString()
+    setListas(prev => prev.map(l => l.id === listaId ? { ...l, status: 'concluida', dataConclusao } : l))
+    if (supabase) await supabase.from('pdv_listas').update({ status: 'concluida', data_conclusao: dataConclusao }).eq('id', listaId)
   }
 
-  function excluirLista(listaId) {
+  async function excluirLista(listaId) {
     setListas(prev => prev.filter(l => l.id !== listaId))
+    if (supabase) await supabase.from('pdv_listas').delete().eq('id', listaId)
   }
 
-  const vendasHoje = vendas.filter(v => {
-    const hoje = new Date().toDateString()
-    return new Date(v.data).toDateString() === hoje
-  })
-
+  const vendasHoje = vendas.filter(v => new Date(v.data).toDateString() === new Date().toDateString())
   const totalHoje = vendasHoje.reduce((acc, v) => acc + v.total, 0)
 
   return (
     <AppContext.Provider value={{
+      lojaId,
+      sincStatus,
       produtos,
       vendas,
       vendasHoje,
@@ -239,6 +394,7 @@ export function AppProvider({ children }) {
       desmarcarItemComprado,
       concluirLista,
       excluirLista,
+      sincronizarComCodigo,
     }}>
       {children}
     </AppContext.Provider>

@@ -1,11 +1,17 @@
 import { useState } from 'react'
-import { Save, Store, CheckCircle } from 'lucide-react'
+import { Save, Store, CheckCircle, Copy, Link2, AlertCircle, Wifi, WifiOff, Loader2, ExternalLink } from 'lucide-react'
 import { useApp } from '../context/AppContext'
+import { supabase } from '../lib/supabase'
 
 export default function Configuracoes() {
-  const { config, salvarConfig } = useApp()
+  const { config, salvarConfig, lojaId, sincStatus, sincronizarComCodigo } = useApp()
   const [form, setForm] = useState({ ...config })
   const [salvo, setSalvo] = useState(false)
+
+  const [copiado, setCopiado] = useState(false)
+  const [codigoSync, setCodigoSync] = useState('')
+  const [sincMsg, setSincMsg] = useState('')
+  const [sincLoading, setSincLoading] = useState(false)
 
   function handleSalvar(e) {
     e.preventDefault()
@@ -14,9 +20,37 @@ export default function Configuracoes() {
     setTimeout(() => setSalvo(false), 3000)
   }
 
+  function copiarCodigo() {
+    navigator.clipboard.writeText(lojaId)
+    setCopiado(true)
+    setTimeout(() => setCopiado(false), 2000)
+  }
+
+  async function handleSincronizar() {
+    if (!codigoSync.trim()) return
+    setSincLoading(true)
+    setSincMsg('')
+    const resultado = await sincronizarComCodigo(codigoSync.trim())
+    setSincLoading(false)
+    if (resultado === 'ok') {
+      setSincMsg('ok')
+    } else if (resultado === 'nao_encontrado') {
+      setSincMsg('nao_encontrado')
+    } else {
+      setSincMsg('sem_supabase')
+    }
+  }
+
+  const sincStatusLabel = {
+    idle: null,
+    sincronizando: { icon: Loader2, text: 'Sincronizando com a nuvem...', color: 'text-blue-600 bg-blue-50 border-blue-200' },
+    ok: { icon: Wifi, text: 'Sincronizado com a nuvem', color: 'text-green-600 bg-green-50 border-green-200' },
+    erro: { icon: WifiOff, text: 'Sem sincronização — dados salvos localmente', color: 'text-yellow-600 bg-yellow-50 border-yellow-200' },
+  }[sincStatus]
+
   return (
-    <div className="p-6 max-w-2xl mx-auto">
-      <div className="flex items-center gap-3 mb-6">
+    <div className="p-6 max-w-2xl mx-auto space-y-5">
+      <div className="flex items-center gap-3 mb-2">
         <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
           <Store size={20} className="text-green-600" />
         </div>
@@ -26,6 +60,15 @@ export default function Configuracoes() {
         </div>
       </div>
 
+      {/* Status sincronização */}
+      {sincStatusLabel && (
+        <div className={`flex items-center gap-2 px-4 py-3 rounded-xl border text-sm font-medium ${sincStatusLabel.color}`}>
+          <sincStatusLabel.icon size={16} className={sincStatus === 'sincronizando' ? 'animate-spin' : ''} />
+          {sincStatusLabel.text}
+        </div>
+      )}
+
+      {/* Dados do mercadinho */}
       <form onSubmit={handleSalvar} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-5">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Nome do mercadinho</label>
@@ -37,7 +80,6 @@ export default function Configuracoes() {
             className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-green-500"
           />
         </div>
-
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Endereço</label>
           <input
@@ -48,7 +90,6 @@ export default function Configuracoes() {
             className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-green-500"
           />
         </div>
-
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Telefone / WhatsApp</label>
           <input
@@ -59,29 +100,121 @@ export default function Configuracoes() {
             className="w-full border-2 border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:border-green-500"
           />
         </div>
-
-        <div className="pt-2">
-          <button
-            type="submit"
-            className="flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-green-700 transition-colors"
-          >
-            {salvo ? <CheckCircle size={18} /> : <Save size={18} />}
-            {salvo ? 'Salvo!' : 'Salvar configurações'}
-          </button>
-        </div>
+        <button
+          type="submit"
+          className="flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-green-700 transition-colors"
+        >
+          {salvo ? <CheckCircle size={18} /> : <Save size={18} />}
+          {salvo ? 'Salvo!' : 'Salvar configurações'}
+        </button>
       </form>
 
-      <div className="mt-6 bg-blue-50 border border-blue-200 rounded-2xl p-5">
+      {/* Sincronização entre dispositivos */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
+        <div className="flex items-center gap-2 mb-1">
+          <Link2 size={18} className="text-blue-600" />
+          <h3 className="font-semibold text-gray-800">Sincronização entre dispositivos</h3>
+        </div>
+
+        {!supabase ? (
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm text-gray-600 space-y-2">
+            <p className="font-medium text-gray-700">Supabase não configurado</p>
+            <p>Para sincronizar celular e computador, configure as variáveis de ambiente:</p>
+            <ul className="list-disc list-inside space-y-1 text-gray-500 font-mono text-xs">
+              <li>VITE_SUPABASE_URL</li>
+              <li>VITE_SUPABASE_ANON_KEY</li>
+            </ul>
+            <p className="text-gray-500">Crie um projeto gratuito em <strong>supabase.com</strong> e execute o SQL em <code className="bg-gray-200 px-1 rounded">supabase/schema.sql</code></p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Código da loja */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Seu código de sincronização</label>
+              <div className="flex gap-2">
+                <code className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-xs text-gray-600 font-mono break-all">
+                  {lojaId}
+                </code>
+                <button
+                  onClick={copiarCodigo}
+                  className="flex items-center gap-2 bg-blue-600 text-white px-4 py-3 rounded-xl font-semibold hover:bg-blue-700 transition-colors text-sm whitespace-nowrap"
+                >
+                  {copiado ? <CheckCircle size={16} /> : <Copy size={16} />}
+                  {copiado ? 'Copiado!' : 'Copiar'}
+                </button>
+              </div>
+              <p className="text-xs text-gray-400 mt-1.5">Cole este código em outro dispositivo para sincronizar os dados</p>
+            </div>
+
+            {/* Sincronizar com outro código */}
+            <div className="border-t pt-4">
+              <label className="block text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Sincronizar com outra loja</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={codigoSync}
+                  onChange={e => setCodigoSync(e.target.value)}
+                  placeholder="Cole o código da loja aqui"
+                  className="flex-1 border-2 border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 font-mono"
+                />
+                <button
+                  onClick={handleSincronizar}
+                  disabled={!codigoSync.trim() || sincLoading}
+                  className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-blue-700 transition-colors text-sm disabled:opacity-40"
+                >
+                  {sincLoading ? <Loader2 size={16} className="animate-spin" /> : <Link2 size={16} />}
+                  Vincular
+                </button>
+              </div>
+              {sincMsg === 'ok' && (
+                <p className="text-sm text-green-600 mt-2 flex items-center gap-1.5">
+                  <CheckCircle size={14} /> Vinculado! Recarregando dados...
+                </p>
+              )}
+              {sincMsg === 'nao_encontrado' && (
+                <p className="text-sm text-red-600 mt-2 flex items-center gap-1.5">
+                  <AlertCircle size={14} /> Código não encontrado. Verifique e tente novamente.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Config IA */}
+      <div className="bg-violet-50 border border-violet-200 rounded-2xl p-5 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="text-lg">✨</span>
+          <h3 className="font-semibold text-violet-800">Entrada de Estoque por IA</h3>
+        </div>
+        <p className="text-sm text-violet-700">
+          A leitura de notas usa o <strong>Google Gemini Flash</strong> (gratuito até 1 milhão de tokens/dia).
+        </p>
+        <div className="bg-white rounded-xl border border-violet-200 p-4 text-sm text-violet-700 space-y-2">
+          <p className="font-medium">Como configurar:</p>
+          <ol className="list-decimal list-inside space-y-1 text-violet-600">
+            <li>Acesse <strong>aistudio.google.com/apikey</strong> — crie uma chave gratuita</li>
+            <li>No painel Vercel do projeto, vá em Settings → Environment Variables</li>
+            <li>Adicione: <code className="bg-violet-100 px-1.5 py-0.5 rounded font-mono text-xs">GEMINI_API_KEY</code> = sua chave</li>
+            <li>Faça um novo deploy (push no GitHub)</li>
+          </ol>
+        </div>
+        <a
+          href="https://aistudio.google.com/apikey"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 text-sm font-semibold text-violet-700 hover:text-violet-900"
+        >
+          <ExternalLink size={14} />
+          Abrir Google AI Studio
+        </a>
+      </div>
+
+      {/* Dica leitor */}
+      <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5">
         <h3 className="font-semibold text-blue-800 mb-2">💡 Dica — Leitor de código de barras</h3>
         <p className="text-sm text-blue-700 leading-relaxed">
           Conecte seu leitor USB normalmente ao notebook. Na tela PDV, clique no campo de busca e escaneie o produto — o código será digitado automaticamente. Se o produto não estiver cadastrado, você será avisado para cadastrá-lo primeiro em <strong>Produtos</strong>.
-        </p>
-      </div>
-
-      <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-2xl p-5">
-        <h3 className="font-semibold text-yellow-800 mb-2">⚠️ Backup dos dados</h3>
-        <p className="text-sm text-yellow-700 leading-relaxed">
-          Os dados são salvos no próprio navegador (localStorage). Para não perder os dados, <strong>não limpe o histórico do navegador</strong> e sempre use o mesmo navegador neste computador. No futuro podemos adicionar backup automático na nuvem.
         </p>
       </div>
     </div>

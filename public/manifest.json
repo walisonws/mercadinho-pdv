@@ -1,0 +1,13 @@
+{
+  "name": "Mercadinho PDV",
+  "short_name": "PDV",
+  "description": "Sistema de ponto de venda para mercadinhos",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#15803d",
+  "theme_color": "#15803d",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
