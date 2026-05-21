@@ -290,8 +290,9 @@ export function AppProvider({ children }) {
   }
 
   // ── Listas de Reposição ───────────────────────────────────
-  async function criarLista(nome) {
-    const nova = { id: uuidv4(), nome, dataCriacao: new Date().toISOString(), status: 'aberta', itens: [] }
+  async function criarLista(nome, itensIniciais = []) {
+    const itens = itensIniciais.map(item => ({ ...item, id: uuidv4(), comprado: false }))
+    const nova = { id: uuidv4(), nome, dataCriacao: new Date().toISOString(), status: 'aberta', itens }
     setListas(prev => [nova, ...prev])
     if (supabase) await supabase.from('pdv_listas').insert(toDbLista(nova, lojaId))
     return nova

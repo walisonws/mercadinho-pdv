@@ -31,9 +31,9 @@ export default function Reposicao() {
     .filter(p => !buscaProduto || p.nome.toLowerCase().includes(buscaProduto.toLowerCase()))
     .sort((a, b) => a.nome.localeCompare(b.nome))
 
-  function handleCriarLista() {
+  async function handleCriarLista() {
     if (!novaLista.trim()) return
-    const nova = criarLista(novaLista.trim())
+    const nova = await criarLista(novaLista.trim())
     setNovaLista('')
     setExpandida(nova.id)
     resetAdicionarEstados()
@@ -128,17 +128,15 @@ export default function Reposicao() {
             ))}
           </div>
           <button
-            onClick={() => {
+            onClick={async () => {
               const nome = `Reposição ${new Date().toLocaleDateString('pt-BR')}`
-              const nova = criarLista(nome)
-              produtosBaixoEstoque.forEach(p => {
-                adicionarItemLista(nova.id, {
-                  nome: p.nome,
-                  quantidade: String(p.estoqueMinimo * 2),
-                  unidade: p.tipo === 'peso' ? 'kg' : 'unidades',
-                  observacao: '',
-                })
-              })
+              const itensIniciais = produtosBaixoEstoque.map(p => ({
+                nome: p.nome,
+                quantidade: String(p.estoqueMinimo > 0 ? p.estoqueMinimo * 2 : 1),
+                unidade: p.tipo === 'peso' ? 'kg' : 'unidades',
+                observacao: '',
+              }))
+              const nova = await criarLista(nome, itensIniciais)
               setAba('abertas')
               setExpandida(nova.id)
             }}
