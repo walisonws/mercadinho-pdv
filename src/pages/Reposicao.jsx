@@ -1,34 +1,81 @@
 import { useState } from 'react'
-import { Plus, Trash2, CheckCircle, Circle, ClipboardList, ChevronDown, ChevronUp, AlertTriangle, PackageCheck } from 'lucide-react'
+import { Plus, Trash2, CheckCircle, Circle, ClipboardList, ChevronDown, ChevronUp, AlertTriangle, PackageCheck, Search, X } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import ModalConfirmarCompra from '../components/ModalConfirmarCompra'
+
+const CATEGORIAS_EMOJI = {
+  mercearia: '🛒', bebidas: '🥤', frutas: '🍎', verduras: '🥦',
+  carnes: '🥩', frios: '🧀', limpeza: '🧹', higiene: '🧴', outros: '📦',
+}
 
 const unidades = ['unidades', 'kg', 'caixas', 'fardos', 'litros', 'pacotes']
 
 export default function Reposicao() {
-  const { listas, produtosBaixoEstoque, criarLista, adicionarItemLista, removerItemLista, marcarItemComprado, desmarcarItemComprado, concluirLista, excluirLista } = useApp()
+  const { listas, produtos, produtosBaixoEstoque, criarLista, adicionarItemLista, removerItemLista, marcarItemComprado, desmarcarItemComprado, concluirLista, excluirLista } = useApp()
 
-  const [listaAberta, setListaAberta] = useState(null)
   const [expandida, setExpandida] = useState(null)
   const [novaLista, setNovaLista] = useState('')
-  const [novoItem, setNovoItem] = useState({ nome: '', quantidade: '', unidade: 'unidades', observacao: '' })
   const [itemConfirmando, setItemConfirmando] = useState(null)
-  const [aba, setAba] = useState('abertas') // 'abertas' | 'concluidas'
+  const [aba, setAba] = useState('abertas')
+
+  const [buscaProduto, setBuscaProduto] = useState('')
+  const [produtoSelecionando, setProdutoSelecionando] = useState(null)
+  const [qtdSelecionando, setQtdSelecionando] = useState('')
+  const [modoCustom, setModoCustom] = useState(false)
+  const [novoItemCustom, setNovoItemCustom] = useState({ nome: '', quantidade: '', unidade: 'unidades', observacao: '' })
 
   const listasFiltradas = listas.filter(l => l.status === (aba === 'abertas' ? 'aberta' : 'concluida'))
+
+  const produtosFiltrados = produtos
+    .filter(p => p.ativo)
+    .filter(p => !buscaProduto || p.nome.toLowerCase().includes(buscaProduto.toLowerCase()))
+    .sort((a, b) => a.nome.localeCompare(b.nome))
 
   function handleCriarLista() {
     if (!novaLista.trim()) return
     const nova = criarLista(novaLista.trim())
     setNovaLista('')
-    setListaAberta(nova.id)
     setExpandida(nova.id)
+    resetAdicionarEstados()
   }
 
-  function handleAdicionarItem(listaId) {
-    if (!novoItem.nome.trim()) return
-    adicionarItemLista(listaId, { ...novoItem, quantidade: novoItem.quantidade || '1' })
-    setNovoItem({ nome: '', quantidade: '', unidade: 'unidades', observacao: '' })
+  function handleExpandir(listaId) {
+    setExpandida(expandida === listaId ? null : listaId)
+    resetAdicionarEstados()
+  }
+
+  function resetAdicionarEstados() {
+    setBuscaProduto('')
+    setProdutoSelecionando(null)
+    setQtdSelecionando('')
+    setModoCustom(false)
+    setNovoItemCustom({ nome: '', quantidade: '', unidade: 'unidades', observacao: '' })
+  }
+
+  function handleSelecionarProduto(listaId, produto) {
+    setProdutoSelecionando({ listaId, produto })
+    setQtdSelecionando(produto.estoqueMinimo > 0 ? String(produto.estoqueMinimo * 2) : '1')
+    setModoCustom(false)
+  }
+
+  function handleConfirmarAdicao() {
+    if (!produtoSelecionando) return
+    const { listaId, produto } = produtoSelecionando
+    adicionarItemLista(listaId, {
+      nome: produto.nome,
+      quantidade: qtdSelecionando || '1',
+      unidade: produto.tipo === 'peso' ? 'kg' : 'unidades',
+      observacao: '',
+    })
+    setProdutoSelecionando(null)
+    setQtdSelecionando('')
+  }
+
+  function handleAdicionarCustom(listaId) {
+    if (!novoItemCustom.nome.trim()) return
+    adicionarItemLista(listaId, { ...novoItemCustom, quantidade: novoItemCustom.quantidade || '1' })
+    setNovoItemCustom({ nome: '', quantidade: '', unidade: 'unidades', observacao: '' })
+    setModoCustom(false)
   }
 
   function handleConfirmarCompra(dados) {
@@ -159,7 +206,7 @@ export default function Reposicao() {
               <div key={lista.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                 {/* Cabeçalho */}
                 <button
-                  onClick={() => setExpandida(aberta ? null : lista.id)}
+                  onClick={() => handleExpandir(lista.id)}
                   className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
                 >
                   <div className="flex items-center gap-3 text-left flex-1 min-w-0">
@@ -193,7 +240,7 @@ export default function Reposicao() {
                     {/* Itens */}
                     <div className="p-4 space-y-2">
                       {lista.itens.length === 0 && (
-                        <p className="text-sm text-gray-400 text-center py-3">Nenhum item. Adicione abaixo.</p>
+                        <p className="text-sm text-gray-400 text-center py-3">Nenhum item. Selecione produtos abaixo.</p>
                       )}
                       {lista.itens.map(item => (
                         <div
@@ -247,50 +294,148 @@ export default function Reposicao() {
                       ))}
                     </div>
 
-                    {/* Adicionar item */}
+                    {/* Adicionar produtos */}
                     {lista.status === 'aberta' && (
                       <div className="border-t bg-gray-50 p-4">
-                        <p className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wide">Adicionar item</p>
-                        <div className="grid grid-cols-3 gap-2 mb-2">
-                          <input
-                            type="text"
-                            value={novoItem.nome}
-                            onChange={e => setNovoItem(p => ({ ...p, nome: e.target.value }))}
-                            onKeyDown={e => e.key === 'Enter' && handleAdicionarItem(lista.id)}
-                            placeholder="Produto"
-                            className="col-span-2 border-2 border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-orange-500"
-                          />
-                          <input
-                            type="number"
-                            value={novoItem.quantidade}
-                            onChange={e => setNovoItem(p => ({ ...p, quantidade: e.target.value }))}
-                            placeholder="Qtd"
-                            className="border-2 border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-orange-500"
-                          />
-                        </div>
-                        <div className="flex gap-2">
-                          <select
-                            value={novoItem.unidade}
-                            onChange={e => setNovoItem(p => ({ ...p, unidade: e.target.value }))}
-                            className="border-2 border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-orange-500 bg-white"
-                          >
-                            {unidades.map(u => <option key={u} value={u}>{u}</option>)}
-                          </select>
-                          <input
-                            type="text"
-                            value={novoItem.observacao}
-                            onChange={e => setNovoItem(p => ({ ...p, observacao: e.target.value }))}
-                            placeholder="Observação (opcional)"
-                            className="flex-1 border-2 border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-orange-500"
-                          />
-                          <button
-                            onClick={() => handleAdicionarItem(lista.id)}
-                            disabled={!novoItem.nome.trim()}
-                            className="bg-orange-500 text-white px-4 py-2 rounded-xl font-semibold hover:bg-orange-600 transition-colors disabled:opacity-40"
-                          >
-                            <Plus size={16} />
-                          </button>
-                        </div>
+
+                        {/* Card de quantidade ao selecionar produto */}
+                        {produtoSelecionando && produtoSelecionando.listaId === lista.id && (
+                          <div className="bg-orange-50 border-2 border-orange-300 rounded-2xl p-4 mb-3">
+                            <div className="flex items-center justify-between mb-3">
+                              <div>
+                                <p className="font-semibold text-gray-800">{produtoSelecionando.produto.nome}</p>
+                                <p className="text-xs text-gray-500">Estoque atual: {produtoSelecionando.produto.estoque}</p>
+                              </div>
+                              <button onClick={() => setProdutoSelecionando(null)} className="text-gray-400 hover:text-gray-600">
+                                <X size={18} />
+                              </button>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                autoFocus
+                                value={qtdSelecionando}
+                                onChange={e => setQtdSelecionando(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && handleConfirmarAdicao()}
+                                placeholder="Qtd"
+                                className="flex-1 border-2 border-orange-200 rounded-xl px-3 py-2 text-lg font-bold text-center focus:outline-none focus:border-orange-500"
+                              />
+                              <span className="text-sm text-gray-500 shrink-0">
+                                {produtoSelecionando.produto.tipo === 'peso' ? 'kg' : 'unidades'}
+                              </span>
+                              <button
+                                onClick={handleConfirmarAdicao}
+                                className="bg-orange-500 text-white px-5 py-2 rounded-xl font-semibold hover:bg-orange-600 transition-colors"
+                              >
+                                Adicionar
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Formulário de item não cadastrado */}
+                        {modoCustom ? (
+                          <div className="bg-white border-2 border-gray-200 rounded-2xl p-4 mb-3">
+                            <div className="flex items-center justify-between mb-3">
+                              <p className="text-sm font-semibold text-gray-700">Item não cadastrado</p>
+                              <button onClick={() => setModoCustom(false)} className="text-gray-400 hover:text-gray-600">
+                                <X size={16} />
+                              </button>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 mb-2">
+                              <input
+                                type="text"
+                                autoFocus
+                                value={novoItemCustom.nome}
+                                onChange={e => setNovoItemCustom(p => ({ ...p, nome: e.target.value }))}
+                                placeholder="Nome do produto"
+                                className="col-span-2 border-2 border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-orange-500"
+                              />
+                              <input
+                                type="number"
+                                value={novoItemCustom.quantidade}
+                                onChange={e => setNovoItemCustom(p => ({ ...p, quantidade: e.target.value }))}
+                                placeholder="Qtd"
+                                className="border-2 border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-orange-500"
+                              />
+                            </div>
+                            <div className="flex gap-2">
+                              <select
+                                value={novoItemCustom.unidade}
+                                onChange={e => setNovoItemCustom(p => ({ ...p, unidade: e.target.value }))}
+                                className="border-2 border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-orange-500 bg-white"
+                              >
+                                {unidades.map(u => <option key={u} value={u}>{u}</option>)}
+                              </select>
+                              <input
+                                type="text"
+                                value={novoItemCustom.observacao}
+                                onChange={e => setNovoItemCustom(p => ({ ...p, observacao: e.target.value }))}
+                                placeholder="Observação (opcional)"
+                                className="flex-1 border-2 border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-orange-500"
+                              />
+                              <button
+                                onClick={() => handleAdicionarCustom(lista.id)}
+                                disabled={!novoItemCustom.nome.trim()}
+                                className="bg-orange-500 text-white px-4 py-2 rounded-xl font-semibold hover:bg-orange-600 transition-colors disabled:opacity-40"
+                              >
+                                <Plus size={16} />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {/* Busca no catálogo */}
+                            <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Selecionar do catálogo</p>
+                            <div className="relative mb-2">
+                              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                              <input
+                                type="text"
+                                value={buscaProduto}
+                                onChange={e => setBuscaProduto(e.target.value)}
+                                placeholder="Buscar produto..."
+                                className="w-full pl-8 pr-3 py-2 border-2 border-gray-200 rounded-xl text-sm focus:outline-none focus:border-orange-500"
+                              />
+                            </div>
+
+                            {produtos.filter(p => p.ativo).length === 0 ? (
+                              <p className="text-xs text-gray-400 text-center py-4">Nenhum produto cadastrado ainda</p>
+                            ) : produtosFiltrados.length === 0 ? (
+                              <p className="text-xs text-gray-400 text-center py-4">Nenhum produto encontrado</p>
+                            ) : (
+                              <div className="grid grid-cols-2 gap-2 max-h-52 overflow-y-auto mb-3 pr-1">
+                                {produtosFiltrados.map(p => (
+                                  <button
+                                    key={p.id}
+                                    onClick={() => handleSelecionarProduto(lista.id, p)}
+                                    className={`flex items-center gap-2 p-2.5 bg-white rounded-xl border-2 text-left transition-all hover:border-orange-400 hover:shadow-sm ${
+                                      produtoSelecionando?.produto.id === p.id && produtoSelecionando?.listaId === lista.id
+                                        ? 'border-orange-400 bg-orange-50'
+                                        : 'border-gray-200'
+                                    }`}
+                                  >
+                                    <span className="text-xl shrink-0">{CATEGORIAS_EMOJI[p.categoria] || '📦'}</span>
+                                    <div className="min-w-0">
+                                      <p className="text-xs font-semibold text-gray-800 truncate">{p.nome}</p>
+                                      <p className={`text-xs ${p.estoque <= p.estoqueMinimo ? 'text-red-500 font-medium' : 'text-gray-400'}`}>
+                                        Estoque: {p.estoque}
+                                      </p>
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Botão item não cadastrado */}
+                            <button
+                              onClick={() => { setModoCustom(true); setProdutoSelecionando(null) }}
+                              className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-gray-300 text-gray-500 rounded-xl py-2.5 text-sm hover:border-orange-400 hover:text-orange-500 transition-colors"
+                            >
+                              <Plus size={14} />
+                              Adicionar item não cadastrado
+                            </button>
+                          </>
+                        )}
                       </div>
                     )}
 
