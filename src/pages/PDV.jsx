@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
-import { Search, Trash2, Plus, Minus, ShoppingCart, AlertCircle, CheckCircle, ScanBarcode } from 'lucide-react'
+import { Search, Trash2, Plus, Minus, ShoppingCart, AlertCircle, CheckCircle, ScanBarcode, Printer } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import ModalPeso from '../components/ModalPeso'
 import ModalFinalizarVenda from '../components/ModalFinalizarVenda'
 import ModalVincularCodigo from '../components/ModalVincularCodigo'
+import { imprimirCupom } from '../utils/imprimirCupom'
 
 const CATEGORIAS_EMOJI = {
   mercearia: '🛒', bebidas: '🥤', frutas: '🍎', verduras: '🥦',
@@ -329,7 +330,7 @@ export default function PDV() {
       {vendaConfirmada && (
         <div className="fixed bottom-6 right-6 bg-green-600 text-white rounded-2xl shadow-2xl p-5 flex items-start gap-3 z-50 min-w-72">
           <CheckCircle size={24} className="shrink-0 mt-0.5" />
-          <div>
+          <div className="flex-1">
             <p className="font-bold text-lg">Venda confirmada!</p>
             <p className="text-green-100 text-sm">
               {vendaConfirmada.forma === 'dinheiro'
@@ -338,6 +339,13 @@ export default function PDV() {
             </p>
             <p className="font-semibold mt-1">Total: R$ {vendaConfirmada.total.toFixed(2)}</p>
           </div>
+          <button
+            onClick={() => imprimirCupom(vendaConfirmada, config)}
+            className="bg-white/20 hover:bg-white/30 text-white rounded-xl px-3 py-2 text-sm font-semibold flex items-center gap-1.5 transition-colors shrink-0 mt-0.5"
+          >
+            <Printer size={15} />
+            Imprimir
+          </button>
         </div>
       )}
     </div>
