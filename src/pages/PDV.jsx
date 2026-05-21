@@ -111,8 +111,8 @@ export default function PDV() {
     inputRef.current?.focus()
   }
 
-  function handleFinalizarVenda({ forma, valorRecebido, troco }) {
-    const venda = registrarVenda({
+  async function handleFinalizarVenda({ forma, valorRecebido, troco }) {
+    const venda = await registrarVenda({
       itens: carrinho.map(i => ({
         produtoId: i.id,
         nome: i.nome,
