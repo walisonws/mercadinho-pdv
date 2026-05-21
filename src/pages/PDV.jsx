@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Search, Trash2, Plus, Minus, ShoppingCart, AlertCircle, CheckCircle } from 'lucide-react'
+import { Search, Trash2, Plus, Minus, ShoppingCart, AlertCircle, CheckCircle, ScanBarcode } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import ModalPeso from '../components/ModalPeso'
 import ModalFinalizarVenda from '../components/ModalFinalizarVenda'
@@ -10,7 +10,7 @@ const CATEGORIAS_EMOJI = {
 }
 
 export default function PDV() {
-  const { buscarPorCodigo, buscarPorNome, registrarVenda, produtos } = useApp()
+  const { buscarPorCodigo, buscarPorNome, registrarVenda, config } = useApp()
   const [busca, setBusca] = useState('')
   const [sugestoes, setSugestoes] = useState([])
   const [carrinho, setCarrinho] = useState([])
@@ -182,24 +182,22 @@ export default function PDV() {
           </div>
         )}
 
-        {/* Atalhos — produtos mais vendidos */}
+        {/* Tela inicial — logo e instrução */}
         {sugestoes.length === 0 && busca.length === 0 && (
-          <div>
-            <p className="text-xs text-gray-400 mb-2 font-medium uppercase tracking-wide">Produtos cadastrados</p>
-            <div className="grid grid-cols-3 gap-2 overflow-y-auto max-h-[calc(100vh-220px)]">
-              {produtos.filter(p => p.ativo).slice(0, 18).map(p => (
-                <button
-                  key={p.id}
-                  onClick={() => adicionarAoCarrinho(p)}
-                  className="bg-white rounded-xl p-3 text-left shadow-sm border border-gray-100 hover:border-green-400 hover:shadow-md transition-all"
-                >
-                  <p className="text-xl mb-1">{CATEGORIAS_EMOJI[p.categoria] || '📦'}</p>
-                  <p className="text-xs font-semibold text-gray-700 leading-tight line-clamp-2">{p.nome}</p>
-                  <p className="text-sm font-bold text-green-700 mt-1">
-                    R$ {p.preco.toFixed(2)}{p.tipo === 'peso' ? '/kg' : ''}
-                  </p>
-                </button>
-              ))}
+          <div className="flex-1 flex flex-col items-center justify-center text-center select-none mt-8">
+            <div className="w-24 h-24 bg-green-100 rounded-3xl flex items-center justify-center mb-5 shadow-sm">
+              <span className="text-5xl">🛒</span>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-800 mb-1">
+              {config?.nomeMercadinho || 'Mercadinho PDV'}
+            </h2>
+            <p className="text-gray-400 text-sm mb-8">Sistema de Ponto de Venda</p>
+            <div className="flex items-center gap-3 bg-white border-2 border-dashed border-gray-200 rounded-2xl px-6 py-4">
+              <ScanBarcode size={22} className="text-green-500 shrink-0" />
+              <p className="text-sm text-gray-500 text-left leading-snug">
+                Escaneie um código de barras<br />
+                <span className="text-gray-400">ou digite o nome do produto acima</span>
+              </p>
             </div>
           </div>
         )}
