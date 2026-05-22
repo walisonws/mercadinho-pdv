@@ -1,10 +1,26 @@
-import { useState } from 'react'
-import { Save, Store, CheckCircle, Copy, Link2, AlertCircle, Wifi, WifiOff, Loader2, ExternalLink, Eye, EyeOff } from 'lucide-react'
+import { useState, useRef } from 'react'
+import { Save, Store, CheckCircle, Copy, Link2, AlertCircle, Wifi, WifiOff, Loader2, ExternalLink, Eye, EyeOff, Download, Upload, FileText, LogOut } from 'lucide-react'
 import { useApp } from '../context/AppContext'
+import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 
+function baixarArquivo(conteudo, nome, tipo = 'text/csv') {
+  const blob = new Blob([conteudo], { type: tipo })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = nome; a.click()
+  URL.revokeObjectURL(url)
+}
+
+function csvEscape(v) {
+  if (v == null) return ''
+  const s = String(v)
+  return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s
+}
+
 export default function Configuracoes() {
-  const { config, salvarConfig, lojaId, sincStatus, sincronizarComCodigo } = useApp()
+  const { config, salvarConfig, lojaId, sincStatus, sincronizarComCodigo, produtos, vendas } = useApp()
+  const { sair, user } = useAuth()
   const [form, setForm] = useState({ ...config })
   const [salvo, setSalvo] = useState(false)
 
@@ -13,6 +29,8 @@ export default function Configuracoes() {
   const [codigoSync, setCodigoSync] = useState('')
   const [sincMsg, setSincMsg] = useState('')
   const [sincLoading, setSincLoading] = useState(false)
+  const [importMsg, setImportMsg] = useState('')
+  const importRef = useRef(null)
 
   function handleSalvar(e) {
     e.preventDefault()
@@ -25,6 +43,41 @@ export default function Configuracoes() {
     navigator.clipboard.writeText(lojaId)
     setCopiado(true)
     setTimeout(() => setCopiado(false), 2000)
+  }
+
+  function exportarProdutos() {
+    const linhas = [
+      ['Nome', 'Codigo', 'Tipo', 'Preco', 'CustoCompra', 'Categoria', 'Estoque', 'EstoqueMinimo'].join(','),
+      ...produtos.map(p => [p.nome, p.codigo, p.tipo, p.preco, p.custoCompra || 0, p.categoria, p.estoque, p.estoqueMinimo].map(csvEscape).join(',')),
+    ]
+    baixarArquivo(linhas.join('\n'), `produtos_${new Date().toISOString().slice(0, 10)}.csv`)
+  }
+
+  function exportarVendas(periodo) {
+    const agora = new Date()
+    const filtradas = vendas.filter(v => {
+      const d = new Date(v.data)
+      if (periodo === 'mes') return d.getMonth() === agora.getMonth() && d.getFullYear() === agora.getFullYear()
+      if (periodo === 'hoje') return d.toDateString() === agora.toDateString()
+      return true
+    })
+    const linhas = [
+      ['Data', 'Hora', 'Total', 'Pagamento', 'Troco', 'Operador', 'Itens'].join(','),
+      ...filtradas.map(v => {
+        const d = new Date(v.data)
+        return [
+          d.toLocaleDateString('pt-BR'),
+          d.toLocaleTimeString('pt-BR'),
+          v.total.toFixed(2),
+          v.pagamento,
+          (v.troco || 0).toFixed(2),
+          v.operadorNome || '',
+          v.itens.map(i => `${i.nome}×${i.quantidade || i.peso}`).join(' | '),
+        ].map(csvEscape).join(',')
+      }),
+    ]
+    const label = periodo === 'mes' ? `${agora.getMonth() + 1}-${agora.getFullYear()}` : periodo === 'hoje' ? agora.toISOString().slice(0, 10) : 'total'
+    baixarArquivo(linhas.join('\n'), `vendas_${label}.csv`)
   }
 
   async function handleSincronizar() {
@@ -243,6 +296,56 @@ export default function Configuracoes() {
         </a>
       </div>
 
+      {/* Backup / Exportar CSV */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
+        <div className="flex items-center gap-2 mb-1">
+          <Download size={18} className="text-gray-500" />
+          <h3 className="font-semibold text-gray-800">Backup e Exportação</h3>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <p className="text-sm font-medium text-gray-700 mb-2">Exportar produtos</p>
+            <button
+              onClick={exportarProdutos}
+              className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+            >
+              <FileText size={16} />
+              Baixar catálogo de produtos (.csv)
+            </button>
+            <p className="text-xs text-gray-400 mt-1">Exporta todos os produtos com preço, custo e estoque</p>
+          </div>
+
+          <div>
+            <p className="text-sm font-medium text-gray-700 mb-2">Exportar vendas</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => exportarVendas('hoje')}
+                className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+              >
+                <Download size={16} />
+                Hoje
+              </button>
+              <button
+                onClick={() => exportarVendas('mes')}
+                className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+              >
+                <Download size={16} />
+                Este mês
+              </button>
+              <button
+                onClick={() => exportarVendas('tudo')}
+                className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+              >
+                <Download size={16} />
+                Tudo
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 mt-1">Exporta histórico de vendas com itens, pagamento e operador</p>
+          </div>
+        </div>
+      </div>
+
       {/* Dica leitor */}
       <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5">
         <h3 className="font-semibold text-blue-800 mb-2">💡 Dica — Leitor de código de barras</h3>
@@ -250,6 +353,23 @@ export default function Configuracoes() {
           Conecte seu leitor USB normalmente ao notebook. Na tela PDV, clique no campo de busca e escaneie o produto — o código será digitado automaticamente. Se o produto não estiver cadastrado, você será avisado para cadastrá-lo primeiro em <strong>Produtos</strong>.
         </p>
       </div>
+
+      {/* Conta / Sair */}
+      {user && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-gray-700">Conta</p>
+            <p className="text-xs text-gray-400 mt-0.5">{user.email}</p>
+          </div>
+          <button
+            onClick={sair}
+            className="flex items-center gap-2 text-sm text-red-500 hover:text-red-700 font-semibold border border-red-200 hover:border-red-400 px-4 py-2 rounded-xl transition-colors"
+          >
+            <LogOut size={16} />
+            Sair
+          </button>
+        </div>
+      )}
     </div>
   )
 }

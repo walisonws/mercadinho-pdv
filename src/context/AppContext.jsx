@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase } from '../lib/supabase'
+import { useAuth } from './AuthContext'
 
 const AppContext = createContext()
 
@@ -9,46 +10,50 @@ const STORAGE_KEYS = {
   vendas: 'pdv_vendas',
   config: 'pdv_config',
   listas: 'pdv_listas',
-  lojaId: 'pdv_loja_id',
+  operadores: 'pdv_operadores',
+  operadorAtivo: 'pdv_operador_ativo',
   caixaAtual: 'pdv_caixa_atual',
   historicosCaixa: 'pdv_historico_caixas',
 }
 
 const produtosPadrao = [
-  { id: uuidv4(), nome: 'Arroz 5kg', codigo: '7896006714055', tipo: 'unidade', preco: 28.90, categoria: 'mercearia', ativo: true, estoque: 10, estoqueMinimo: 3 },
-  { id: uuidv4(), nome: 'Feijão 1kg', codigo: '7896006714062', tipo: 'unidade', preco: 8.50, categoria: 'mercearia', ativo: true, estoque: 8, estoqueMinimo: 3 },
-  { id: uuidv4(), nome: 'Óleo de Soja 900ml', codigo: '7896036090046', tipo: 'unidade', preco: 7.90, categoria: 'mercearia', ativo: true, estoque: 12, estoqueMinimo: 4 },
-  { id: uuidv4(), nome: 'Banana (kg)', codigo: '2000000000001', tipo: 'peso', preco: 4.50, categoria: 'frutas', ativo: true, estoque: 15, estoqueMinimo: 5 },
-  { id: uuidv4(), nome: 'Carne Moída (kg)', codigo: '2000000000002', tipo: 'peso', preco: 35.00, categoria: 'carnes', ativo: true, estoque: 8, estoqueMinimo: 3 },
-  { id: uuidv4(), nome: 'Refrigerante 2L', codigo: '7891234100013', tipo: 'unidade', preco: 9.00, categoria: 'bebidas', ativo: true, estoque: 20, estoqueMinimo: 6 },
-  { id: uuidv4(), nome: 'Macarrão 500g', codigo: '7896005800089', tipo: 'unidade', preco: 4.20, categoria: 'mercearia', ativo: true, estoque: 2, estoqueMinimo: 5 },
-  { id: uuidv4(), nome: 'Presunto (kg)', codigo: '2000000000003', tipo: 'peso', preco: 28.00, categoria: 'frios', ativo: true, estoque: 4, estoqueMinimo: 2 },
+  { id: uuidv4(), nome: 'Arroz 5kg', codigo: '7896006714055', tipo: 'unidade', preco: 28.90, custoCompra: 0, categoria: 'mercearia', ativo: true, estoque: 10, estoqueMinimo: 3, codigosAlternativos: [] },
+  { id: uuidv4(), nome: 'Feijão 1kg', codigo: '7896006714062', tipo: 'unidade', preco: 8.50, custoCompra: 0, categoria: 'mercearia', ativo: true, estoque: 8, estoqueMinimo: 3, codigosAlternativos: [] },
+  { id: uuidv4(), nome: 'Óleo de Soja 900ml', codigo: '7896036090046', tipo: 'unidade', preco: 7.90, custoCompra: 0, categoria: 'mercearia', ativo: true, estoque: 12, estoqueMinimo: 4, codigosAlternativos: [] },
+  { id: uuidv4(), nome: 'Banana (kg)', codigo: '2000000000001', tipo: 'peso', preco: 4.50, custoCompra: 0, categoria: 'frutas', ativo: true, estoque: 15, estoqueMinimo: 5, codigosAlternativos: [] },
+  { id: uuidv4(), nome: 'Carne Moída (kg)', codigo: '2000000000002', tipo: 'peso', preco: 35.00, custoCompra: 0, categoria: 'carnes', ativo: true, estoque: 8, estoqueMinimo: 3, codigosAlternativos: [] },
+  { id: uuidv4(), nome: 'Refrigerante 2L', codigo: '7891234100013', tipo: 'unidade', preco: 9.00, custoCompra: 0, categoria: 'bebidas', ativo: true, estoque: 20, estoqueMinimo: 6, codigosAlternativos: [] },
+  { id: uuidv4(), nome: 'Macarrão 500g', codigo: '7896005800089', tipo: 'unidade', preco: 4.20, custoCompra: 0, categoria: 'mercearia', ativo: true, estoque: 2, estoqueMinimo: 5, codigosAlternativos: [] },
+  { id: uuidv4(), nome: 'Presunto (kg)', codigo: '2000000000003', tipo: 'peso', preco: 28.00, custoCompra: 0, categoria: 'frios', ativo: true, estoque: 4, estoqueMinimo: 2, codigosAlternativos: [] },
 ]
 
 // ── Mappers Supabase ↔ App ────────────────────────────────
 const fromDbProduto = p => ({
   id: p.id, nome: p.nome, codigo: p.codigo, tipo: p.tipo,
-  preco: p.preco, categoria: p.categoria, ativo: p.ativo,
+  preco: p.preco, custoCompra: p.custo_compra || 0, categoria: p.categoria, ativo: p.ativo,
   estoque: p.estoque, estoqueMinimo: p.estoque_minimo,
   codigosAlternativos: p.codigos_alternativos || [],
 })
 
 const toDbProduto = (p, lojaId) => ({
   id: p.id, loja_id: lojaId, nome: p.nome, codigo: p.codigo,
-  tipo: p.tipo, preco: p.preco, categoria: p.categoria,
+  tipo: p.tipo, preco: p.preco, custo_compra: p.custoCompra || 0, categoria: p.categoria,
   ativo: p.ativo ?? true, estoque: p.estoque ?? 0,
   estoque_minimo: p.estoqueMinimo ?? 0,
+  codigos_alternativos: p.codigosAlternativos || [],
 })
 
 const fromDbVenda = v => ({
   id: v.id, itens: v.itens, total: v.total, pagamento: v.pagamento,
   valorRecebido: v.valor_recebido, troco: v.troco, data: v.data,
+  operadorId: v.operador_id || null, operadorNome: v.operador_nome || null,
 })
 
 const toDbVenda = (v, lojaId) => ({
   id: v.id, loja_id: lojaId, itens: v.itens, total: v.total,
   pagamento: v.pagamento, valor_recebido: v.valorRecebido ?? null,
   troco: v.troco ?? null, data: v.data,
+  operador_id: v.operadorId ?? null, operador_nome: v.operadorNome ?? null,
 })
 
 const fromDbLista = l => ({
@@ -63,15 +68,11 @@ const toDbLista = (l, lojaId) => ({
 })
 
 export function AppProvider({ children }) {
-  const [lojaId, setLojaId] = useState(() => {
-    let id = localStorage.getItem(STORAGE_KEYS.lojaId)
-    if (!id) { id = uuidv4(); localStorage.setItem(STORAGE_KEYS.lojaId, id) }
-    return id
-  })
+  const { lojaId } = useAuth()
 
   const [produtos, setProdutos] = useState(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.produtos)
-    if (saved) return JSON.parse(saved).map(p => ({ estoque: 0, estoqueMinimo: 0, ...p }))
+    if (saved) return JSON.parse(saved).map(p => ({ custoCompra: 0, estoque: 0, estoqueMinimo: 0, codigosAlternativos: [], ...p }))
     return produtosPadrao
   })
 
@@ -90,6 +91,16 @@ export function AppProvider({ children }) {
     return saved ? JSON.parse(saved) : []
   })
 
+  const [operadores, setOperadores] = useState(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.operadores)
+    return saved ? JSON.parse(saved) : []
+  })
+
+  const [operadorAtivo, setOperadorAtivo] = useState(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.operadorAtivo)
+    return saved ? JSON.parse(saved) : null
+  })
+
   const [caixaAtual, setCaixaAtual] = useState(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.caixaAtual)
     return saved ? JSON.parse(saved) : null
@@ -100,13 +111,18 @@ export function AppProvider({ children }) {
     return saved ? JSON.parse(saved) : []
   })
 
-  const [sincStatus, setSincStatus] = useState('idle') // 'idle' | 'sincronizando' | 'ok' | 'erro'
+  const [sincStatus, setSincStatus] = useState('idle')
 
   // ── Persistência localStorage ─────────────────────────────
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.produtos, JSON.stringify(produtos)) }, [produtos])
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.vendas, JSON.stringify(vendas)) }, [vendas])
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.config, JSON.stringify(config)) }, [config])
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.listas, JSON.stringify(listas)) }, [listas])
+  useEffect(() => { localStorage.setItem(STORAGE_KEYS.operadores, JSON.stringify(operadores)) }, [operadores])
+  useEffect(() => {
+    if (operadorAtivo) localStorage.setItem(STORAGE_KEYS.operadorAtivo, JSON.stringify(operadorAtivo))
+    else localStorage.removeItem(STORAGE_KEYS.operadorAtivo)
+  }, [operadorAtivo])
   useEffect(() => {
     if (caixaAtual) localStorage.setItem(STORAGE_KEYS.caixaAtual, JSON.stringify(caixaAtual))
     else localStorage.removeItem(STORAGE_KEYS.caixaAtual)
@@ -115,7 +131,7 @@ export function AppProvider({ children }) {
 
   // ── Supabase: carrega dados e inscreve realtime ───────────
   useEffect(() => {
-    if (!supabase) return
+    if (!supabase || !lojaId) return
     carregarDoSupabase(lojaId)
     const channel = configurarRealtime(lojaId)
     return () => { supabase.removeChannel(channel) }
@@ -218,16 +234,15 @@ export function AppProvider({ children }) {
     if (!supabase || !novoCodigo.trim()) return 'sem_supabase'
     const { data } = await supabase.from('pdv_produtos').select('id').eq('loja_id', novoCodigo.trim()).limit(1)
     if (!data?.length) return 'nao_encontrado'
-    localStorage.setItem(STORAGE_KEYS.lojaId, novoCodigo.trim())
-    setLojaId(novoCodigo.trim())
+    localStorage.setItem('pdv_loja_id', novoCodigo.trim())
     return 'ok'
   }
 
   // ── Produtos ──────────────────────────────────────────────
   async function adicionarProduto(produto) {
-    const novo = { estoque: 0, estoqueMinimo: 0, ...produto, id: uuidv4(), ativo: true }
+    const novo = { custoCompra: 0, estoque: 0, estoqueMinimo: 0, codigosAlternativos: [], ...produto, id: uuidv4(), ativo: true }
     setProdutos(prev => [...prev, novo])
-    if (supabase) await supabase.from('pdv_produtos').insert(toDbProduto(novo, lojaId))
+    if (supabase && lojaId) await supabase.from('pdv_produtos').insert(toDbProduto(novo, lojaId))
   }
 
   async function editarProduto(id, dados) {
@@ -237,7 +252,7 @@ export function AppProvider({ children }) {
       atualizado = { ...p, ...dados }
       return atualizado
     }))
-    if (supabase && atualizado) {
+    if (supabase && atualizado && lojaId) {
       await supabase.from('pdv_produtos').update(toDbProduto(atualizado, lojaId)).eq('id', id)
     }
   }
@@ -274,7 +289,7 @@ export function AppProvider({ children }) {
         await supabase.from('pdv_produtos')
           .update({ codigos_alternativos: atualizado.codigosAlternativos })
           .eq('id', produtoId)
-      } catch { /* coluna pode não existir ainda no supabase */ }
+      } catch { /* coluna pode não existir no Supabase */ }
     }
   }
 
@@ -289,18 +304,24 @@ export function AppProvider({ children }) {
 
   // ── Vendas ────────────────────────────────────────────────
   async function registrarVenda(venda) {
-    const novaVenda = { ...venda, id: uuidv4(), data: new Date().toISOString() }
+    const novaVenda = {
+      ...venda,
+      id: uuidv4(),
+      data: new Date().toISOString(),
+      operadorId: operadorAtivo?.id || null,
+      operadorNome: operadorAtivo?.nome || null,
+    }
     setVendas(prev => [novaVenda, ...prev])
     venda.itens.forEach(item => {
       if (item.tipo === 'unidade') atualizarEstoque(item.produtoId, -item.quantidade)
     })
-    if (supabase) await supabase.from('pdv_vendas').insert(toDbVenda(novaVenda, lojaId))
+    if (supabase && lojaId) await supabase.from('pdv_vendas').insert(toDbVenda(novaVenda, lojaId))
     return novaVenda
   }
 
   async function salvarConfig(dados) {
     setConfig(prev => ({ ...prev, ...dados }))
-    if (supabase) await supabase.from('pdv_config').upsert({
+    if (supabase && lojaId) await supabase.from('pdv_config').upsert({
       loja_id: lojaId,
       nome_mercadinho: dados.nomeMercadinho,
       endereco: dados.endereco,
@@ -313,7 +334,7 @@ export function AppProvider({ children }) {
     const itens = itensIniciais.map(item => ({ ...item, id: uuidv4(), comprado: false }))
     const nova = { id: uuidv4(), nome, dataCriacao: new Date().toISOString(), status: 'aberta', itens }
     setListas(prev => [nova, ...prev])
-    if (supabase) await supabase.from('pdv_listas').insert(toDbLista(nova, lojaId))
+    if (supabase && lojaId) await supabase.from('pdv_listas').insert(toDbLista(nova, lojaId))
     return nova
   }
 
@@ -405,6 +426,30 @@ export function AppProvider({ children }) {
     if (supabase) await supabase.from('pdv_listas').delete().eq('id', listaId)
   }
 
+  // ── Operadores ────────────────────────────────────────────
+  function adicionarOperador(nome, pin) {
+    const novo = { id: uuidv4(), nome, pin, ativo: true, criadoEm: new Date().toISOString() }
+    setOperadores(prev => [...prev, novo])
+    return novo
+  }
+
+  function editarOperador(id, dados) {
+    setOperadores(prev => prev.map(op => op.id === id ? { ...op, ...dados } : op))
+  }
+
+  function excluirOperador(id) {
+    setOperadores(prev => prev.filter(op => op.id !== id))
+    if (operadorAtivo?.id === id) setOperadorAtivo(null)
+  }
+
+  function ativarOperador(operador) {
+    setOperadorAtivo(operador)
+  }
+
+  function desativarOperador() {
+    setOperadorAtivo(null)
+  }
+
   // ── Caixa ─────────────────────────────────────────────────
   function abrirCaixa(valorInicial) {
     const novo = {
@@ -447,6 +492,8 @@ export function AppProvider({ children }) {
       config,
       listas,
       produtosBaixoEstoque,
+      operadores,
+      operadorAtivo,
       adicionarProduto,
       editarProduto,
       excluirProduto,
@@ -464,6 +511,11 @@ export function AppProvider({ children }) {
       concluirLista,
       excluirLista,
       sincronizarComCodigo,
+      adicionarOperador,
+      editarOperador,
+      excluirOperador,
+      ativarOperador,
+      desativarOperador,
       caixaAtual,
       historicosCaixa,
       abrirCaixa,
