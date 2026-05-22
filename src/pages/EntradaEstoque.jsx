@@ -48,7 +48,7 @@ async function comprimirImagem(file, maxWidth = 2000, melhorar = false) {
 
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent'
 
-async function chamarGemini(apiKey, contents) {
+async function chamarGemini(apiKey, contents, tentativa = 0) {
   const response = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -57,9 +57,10 @@ async function chamarGemini(apiKey, contents) {
   if (!response.ok) {
     const errText = await response.text()
     let mensagem = 'Erro desconhecido. Tente novamente.'
+    let code = null
     try {
       const errJson = JSON.parse(errText)
-      const code = errJson?.error?.code
+      code = errJson?.error?.code
       const violations = errJson?.error?.details?.find(d => d['@type']?.includes('QuotaFailure'))?.violations || []
       const quotaZerada = violations.some(v => v.quotaId?.includes('GenerateRequestsPerDay') || v.quotaId?.includes('FreeTier'))
       if (code === 400) {
@@ -70,6 +71,13 @@ async function chamarGemini(apiKey, contents) {
         } else {
           mensagem = 'Limite de requisições atingido. Aguarde alguns minutos e tente novamente.'
         }
+      } else if (code === 503 || code === 500) {
+        // Retry automático para sobrecarga temporária (até 3 tentativas)
+        if (tentativa < 3) {
+          await new Promise(r => setTimeout(r, 3000 * (tentativa + 1)))
+          return chamarGemini(apiKey, contents, tentativa + 1)
+        }
+        mensagem = 'O serviço de IA está sobrecarregado agora. Aguarde 1 minuto e tente novamente.'
       }
     } catch { /* usa mensagem padrão */ }
     throw new Error(mensagem)
