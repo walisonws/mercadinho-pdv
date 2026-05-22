@@ -56,13 +56,21 @@ async function chamarGemini(apiKey, contents) {
   })
   if (!response.ok) {
     const errText = await response.text()
-    let mensagem = 'Erro ao chamar Gemini API'
+    let mensagem = 'Erro desconhecido. Tente novamente.'
     try {
       const errJson = JSON.parse(errText)
       const code = errJson?.error?.code
-      if (code === 400) mensagem = 'Chave Gemini inválida. Verifique em Configurações.'
-      else if (code === 429) mensagem = 'Limite de uso atingido. Tente novamente em alguns minutos.'
-      else if (code === 403) mensagem = 'Chave sem permissão. Crie uma nova chave no Google AI Studio.'
+      const violations = errJson?.error?.details?.find(d => d['@type']?.includes('QuotaFailure'))?.violations || []
+      const quotaZerada = violations.some(v => v.quotaId?.includes('GenerateRequestsPerDay') || v.quotaId?.includes('FreeTier'))
+      if (code === 400) {
+        mensagem = 'Chave inválida. Gere uma nova chave em aistudio.google.com/apikey e cole em Configurações.'
+      } else if (code === 429 || code === 403) {
+        if (quotaZerada) {
+          mensagem = 'Cota da chave esgotada (limite 0). Crie uma nova chave gratuita em aistudio.google.com/apikey e cole no campo acima.'
+        } else {
+          mensagem = 'Limite de requisições atingido. Aguarde alguns minutos e tente novamente.'
+        }
+      }
     } catch { /* usa mensagem padrão */ }
     throw new Error(mensagem)
   }
