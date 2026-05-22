@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { Camera, Upload, Loader2, CheckCircle, AlertCircle, Package, Search, Plus, X, Sparkles, ChevronDown, Scissors, AlignLeft } from 'lucide-react'
+import { Camera, Upload, Loader2, CheckCircle, AlertCircle, Package, Search, Plus, X, Sparkles, ChevronDown, Scissors, AlignLeft, Key, Eye, EyeOff, ExternalLink } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 
 const categorias = ['mercearia', 'bebidas', 'frutas', 'verduras', 'carnes', 'frios', 'limpeza', 'higiene', 'outros']
@@ -71,7 +71,7 @@ async function chamarGemini(apiKey, contents) {
 }
 
 export default function EntradaEstoque() {
-  const { produtos, adicionarProduto, editarProduto, config } = useApp()
+  const { produtos, adicionarProduto, editarProduto, config, salvarConfig } = useApp()
   const fileInputRef = useRef(null)
   const cameraRef = useRef(null)
 
@@ -84,6 +84,20 @@ export default function EntradaEstoque() {
   const [modoCorte, setModoCorte] = useState(false)
   const [modoColar, setModoColar] = useState(false)
   const [textoNota, setTextoNota] = useState('')
+  const [chaveInput, setChaveInput] = useState('')
+  const [mostrarChave, setMostrarChave] = useState(false)
+  const [salvandoChave, setSalvandoChave] = useState(false)
+  const [chaveSalva, setChaveSalva] = useState(false)
+
+  async function salvarChave() {
+    const chave = chaveInput.trim()
+    if (!chave) return
+    setSalvandoChave(true)
+    await salvarConfig({ ...config, geminiApiKey: chave })
+    setSalvandoChave(false)
+    setChaveSalva(true)
+    setTimeout(() => setChaveSalva(false), 3000)
+  }
 
   function handleCrop(blob) {
     const file = new File([blob], 'nota_recortada.jpg', { type: 'image/jpeg' })
@@ -288,6 +302,71 @@ Se não encontrar itens: {"itens": []}`
         </div>
       </div>
 
+      {/* Setup inline quando não tem chave */}
+      {!config?.geminiApiKey?.trim() && (
+        <div className="bg-gradient-to-br from-violet-50 to-indigo-50 border-2 border-violet-200 rounded-2xl p-6 space-y-5 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-violet-600 rounded-2xl flex items-center justify-center shrink-0">
+              <Key size={24} className="text-white" />
+            </div>
+            <div>
+              <h2 className="font-bold text-violet-900 text-lg">Ativar Nota IA</h2>
+              <p className="text-sm text-violet-600">Adicione sua chave gratuita do Google para começar</p>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl border border-violet-200 p-4 text-sm space-y-2">
+            <p className="font-semibold text-gray-700">Como obter a chave (2 minutos):</p>
+            <ol className="list-decimal list-inside space-y-1 text-gray-600">
+              <li>Clique em <strong>"Abrir Google AI Studio"</strong> abaixo</li>
+              <li>Faça login com sua conta Google</li>
+              <li>Clique em <strong>"Create API key"</strong> → copie a chave</li>
+              <li>Cole aqui e clique em <strong>Ativar</strong></li>
+            </ol>
+            <a
+              href="https://aistudio.google.com/apikey"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-violet-600 font-semibold hover:text-violet-800 mt-1"
+            >
+              <ExternalLink size={14} /> Abrir Google AI Studio
+            </a>
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-sm font-semibold text-violet-800">Cole sua chave aqui:</label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <input
+                  type={mostrarChave ? 'text' : 'password'}
+                  value={chaveInput}
+                  onChange={e => setChaveInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && salvarChave()}
+                  placeholder="AIzaSy..."
+                  className="w-full border-2 border-violet-300 rounded-xl px-4 py-3 pr-10 font-mono text-sm focus:outline-none focus:border-violet-600 bg-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => setMostrarChave(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-violet-400 hover:text-violet-600"
+                >
+                  {mostrarChave ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+              <button
+                onClick={salvarChave}
+                disabled={!chaveInput.trim() || salvandoChave}
+                className="flex items-center gap-2 bg-violet-600 text-white px-5 py-3 rounded-xl font-bold hover:bg-violet-700 transition-colors disabled:opacity-40 whitespace-nowrap"
+              >
+                {salvandoChave ? <Loader2 size={16} className="animate-spin" /> : chaveSalva ? <CheckCircle size={16} /> : <Key size={16} />}
+                {chaveSalva ? 'Ativado!' : 'Ativar'}
+              </button>
+            </div>
+            <p className="text-xs text-violet-500">A chave fica salva só neste dispositivo. 1.500 análises grátis por dia.</p>
+          </div>
+        </div>
+      )}
+
       {/* Etapa: upload */}
       {(etapa === 'upload' || etapa === 'analisando') && (
         <div className="space-y-4">
@@ -432,16 +511,6 @@ Se não encontrar itens: {"itens": []}`
                 >
                   <AlignLeft size={13} /> Colar texto
                 </button>
-              </div>
-            </div>
-          )}
-
-          {!config?.geminiApiKey?.trim() && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
-              <AlertCircle size={18} className="text-amber-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm text-amber-800 font-semibold">Chave Gemini não configurada</p>
-                <p className="text-xs text-amber-700 mt-0.5">Vá em <strong>Configurações → Entrada de Estoque por IA</strong> e adicione sua chave gratuita do Google.</p>
               </div>
             </div>
           )}
