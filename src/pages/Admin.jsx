@@ -170,7 +170,7 @@ export default function Admin() {
         supabase.from('pdv_vendas').select('loja_id, total, data'),
         supabase.from('pdv_produtos').select('loja_id, id'),
         supabase.from('pdv_operadores').select('loja_id, id'),
-        supabase.from('pdv_clientes').select('*'),
+        supabase.from('pdv_clientes').select('*').then(r => r.error ? { data: [] } : r),
       ])
 
       const configs = configRes.data || []
