@@ -54,7 +54,7 @@ export function imprimirCupom(venda, config = {}) {
   const div = document.createElement('div')
   div.id = '__cupom_print__'
   div.innerHTML = S('div',
-    'font-family:Courier New,Courier,monospace;font-size:11px;color:#000;width:76mm',
+    'font-family:Courier New,Courier,monospace;font-size:11px;color:#000;width:54mm',
     cupomHTML
   )
   document.body.appendChild(div)
@@ -64,7 +64,7 @@ export function imprimirCupom(venda, config = {}) {
     @media print {
       body > *:not(#__cupom_print__) { display: none !important; }
       #__cupom_print__ { display: block !important; }
-      @page { size: 80mm auto; margin: 3mm 2mm; }
+      @page { size: 58mm auto; margin: 2mm 1mm; }
     }
     #__cupom_print__ { display: none; }
   `
