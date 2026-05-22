@@ -24,3 +24,14 @@ create index if not exists idx_pdv_operadores_loja on pdv_operadores(loja_id);
 
 -- Habilitar Realtime para pdv_operadores:
 -- Supabase Dashboard > Database > Replication > habilitar pdv_operadores
+
+-- Tabela de controle de clientes (painel admin)
+create table if not exists pdv_clientes (
+  loja_id text primary key,
+  status text not null default 'ativo', -- ativo, vitalicio, trial, suspenso
+  data_vencimento date,
+  observacao text default '',
+  criado_em timestamptz default now(),
+  atualizado_em timestamptz default now()
+);
+create index if not exists idx_pdv_clientes_status on pdv_clientes(status);
