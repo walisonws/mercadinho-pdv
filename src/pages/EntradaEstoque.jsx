@@ -46,10 +46,15 @@ async function comprimirImagem(file, maxWidth = 2000, melhorar = false) {
   })
 }
 
-const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent'
+const GEMINI_MODELS = [
+  'gemini-2.5-flash',
+  'gemini-2.5-flash-lite',
+]
+const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
 
-async function chamarGemini(apiKey, contents, tentativa = 0) {
-  const response = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+async function chamarGemini(apiKey, contents, modelIdx = 0, tentativa = 0) {
+  const model = GEMINI_MODELS[modelIdx] || GEMINI_MODELS[0]
+  const response = await fetch(`${GEMINI_BASE}/${model}:generateContent?key=${apiKey}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ contents, generationConfig: { temperature: 0.1, maxOutputTokens: 4096 } }),
@@ -72,10 +77,14 @@ async function chamarGemini(apiKey, contents, tentativa = 0) {
           mensagem = 'Limite de requisições atingido. Aguarde alguns minutos e tente novamente.'
         }
       } else if (code === 503 || code === 500) {
-        // Retry automático para sobrecarga temporária (até 3 tentativas)
-        if (tentativa < 3) {
-          await new Promise(r => setTimeout(r, 3000 * (tentativa + 1)))
-          return chamarGemini(apiKey, contents, tentativa + 1)
+        // Tenta modelo alternativo antes de desistir
+        if (modelIdx + 1 < GEMINI_MODELS.length) {
+          return chamarGemini(apiKey, contents, modelIdx + 1, 0)
+        }
+        // Retry no último modelo
+        if (tentativa < 2) {
+          await new Promise(r => setTimeout(r, 4000 * (tentativa + 1)))
+          return chamarGemini(apiKey, contents, modelIdx, tentativa + 1)
         }
         mensagem = 'O serviço de IA está sobrecarregado agora. Aguarde 1 minuto e tente novamente.'
       }
