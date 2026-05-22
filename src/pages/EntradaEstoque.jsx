@@ -46,8 +46,32 @@ async function comprimirImagem(file, maxWidth = 2000, melhorar = false) {
   })
 }
 
+const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent'
+
+async function chamarGemini(apiKey, contents) {
+  const response = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contents, generationConfig: { temperature: 0.1, maxOutputTokens: 4096 } }),
+  })
+  if (!response.ok) {
+    const errText = await response.text()
+    let mensagem = 'Erro ao chamar Gemini API'
+    try {
+      const errJson = JSON.parse(errText)
+      const code = errJson?.error?.code
+      if (code === 400) mensagem = 'Chave Gemini inválida. Verifique em Configurações.'
+      else if (code === 429) mensagem = 'Limite de uso atingido. Tente novamente em alguns minutos.'
+      else if (code === 403) mensagem = 'Chave sem permissão. Crie uma nova chave no Google AI Studio.'
+    } catch { /* usa mensagem padrão */ }
+    throw new Error(mensagem)
+  }
+  const data = await response.json()
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+}
+
 export default function EntradaEstoque() {
-  const { produtos, adicionarProduto, editarProduto } = useApp()
+  const { produtos, adicionarProduto, editarProduto, config } = useApp()
   const fileInputRef = useRef(null)
   const cameraRef = useRef(null)
 
@@ -71,18 +95,39 @@ export default function EntradaEstoque() {
 
   async function analisarTexto() {
     if (!textoNota.trim()) return
+    const apiKey = config?.geminiApiKey?.trim()
+    if (!apiKey) {
+      setErroApi('Chave Gemini não configurada. Vá em Configurações e adicione sua chave gratuita.')
+      return
+    }
     setEtapa('analisando')
     setErroApi('')
     try {
-      const res = await fetch('/api/ler-nota', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ texto: textoNota }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.detalhe ? `${data.erro}: ${data.detalhe}` : (data.erro || 'Erro ao analisar'))
-      if (!data.itens?.length) throw new Error('Nenhum item encontrado. Verifique se o texto contém produtos com quantidades e preços.')
-      const itensProcessados = data.itens.map((item, i) => {
+      const promptTexto = `Você é um especialista em notas fiscais brasileiras. Analise o texto abaixo e identifique os produtos.
+
+REGRAS:
+- Ignore linhas de desconto, totais, impostos e informações que não sejam itens
+- Se o mesmo produto aparecer múltiplas vezes, some as quantidades
+- Nome do produto: limpo, sem códigos numéricos no início
+
+Para cada item retorne:
+- nome: nome limpo do produto
+- quantidade: quantidade numérica (number)
+- unidade: "un" para unidade/peça, "kg" para quilogramas, "cx" para caixa, "fd" para fardo, "lt" para litro, "pc" para pacote
+- preco_unitario: preço unitário em reais (number)
+
+TEXTO DA NOTA:
+${textoNota}
+
+Retorne SOMENTE JSON válido, sem texto adicional:
+{"itens": [{"nome": "Banana Nanica kg", "quantidade": 14.84, "unidade": "kg", "preco_unitario": 4.99}]}
+
+Se não encontrar itens: {"itens": []}`
+      const rawText = await chamarGemini(apiKey, [{ parts: [{ text: promptTexto }] }])
+      let parsed = { itens: [] }
+      try { const m = rawText.match(/\{[\s\S]*\}/); if (m) parsed = JSON.parse(m[0]) } catch { /* */ }
+      if (!parsed.itens?.length) throw new Error('Nenhum item encontrado. Verifique se o texto contém produtos com quantidades e preços.')
+      const itensProcessados = parsed.itens.map((item, i) => {
         const sugestoes = produtos.filter(p =>
           p.ativo && p.nome.toLowerCase().includes((item.nome || '').toLowerCase().slice(0, 4))
         ).slice(0, 5)
@@ -114,20 +159,50 @@ export default function EntradaEstoque() {
 
   async function analisarNota() {
     if (!imagem) return
+    const apiKey = config?.geminiApiKey?.trim()
+    if (!apiKey) {
+      setErroApi('Chave Gemini não configurada. Vá em Configurações e adicione sua chave gratuita.')
+      return
+    }
     setEtapa('analisando')
     setErroApi('')
     try {
       const { base64, mimeType } = await comprimirImagem(imagem, 2000, melhorarImagem)
-      const res = await fetch('/api/ler-nota', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imagemBase64: base64, mimeType }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.detalhe ? `${data.erro}: ${data.detalhe}` : (data.erro || 'Erro ao analisar nota'))
-      if (!data.itens?.length) throw new Error('Nenhum item encontrado na imagem. Tente uma foto mais clara.')
+      const prompt = `Você é um especialista em leitura de notas fiscais brasileiras. Analise a imagem com atenção máxima.
 
-      const itensProcessados = data.itens.map((item, i) => {
+TIPOS DE DOCUMENTO que você pode receber:
+1. DANF-e / NF-e: tabela com colunas Código, Descrição, QTD, V.UN, V.TOTAL
+2. NFC-e (cupom fiscal eletrônico): formato estreito, cada item em 2 linhas:
+   - Linha 1: número do item + código + NOME DO PRODUTO + unidade
+   - Linha 2: quantidade + "Kg" ou "Un" + "x" + preço unitário + valor total
+   Exemplo: "001  576 BANANA NANICA kg" / "3,035 Kg x  4,99  15,14"
+3. Nota de atacado / armazém: formato livre, menos estruturado
+
+REGRAS IMPORTANTES:
+- Ignore anotações manuscritas (valores escritos à mão sobre o impresso)
+- Ignore linhas de "Desconto no item X"
+- Para NFC-e, use o preço da linha 2 (valor numérico após o "x"), não o preço riscado ou manuscrito
+- Nome do produto: use o nome impresso, limpo, sem códigos numéricos no início
+- Se o mesmo produto aparecer múltiplas vezes, some as quantidades em um único item
+
+Para cada item retorne:
+- nome: nome limpo do produto (ex: "Banana Nanica kg", "Arroz 5kg", "Coca-Cola 2L")
+- quantidade: quantidade numérica (number)
+- unidade: "un" para unidade/peça, "kg" para quilogramas, "cx" para caixa, "fd" para fardo, "lt" para litro, "pc" para pacote
+- preco_unitario: preço unitário em reais (number, ex: 4.99)
+
+Retorne SOMENTE JSON válido, sem texto adicional:
+{"itens": [{"nome": "Banana Nanica kg", "quantidade": 14.84, "unidade": "kg", "preco_unitario": 4.99}]}
+
+Se não encontrar itens: {"itens": []}`
+
+      const contents = [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: base64 } }] }]
+      const rawText = await chamarGemini(apiKey, contents)
+      let parsed = { itens: [] }
+      try { const m = rawText.match(/\{[\s\S]*\}/); if (m) parsed = JSON.parse(m[0]) } catch { /* */ }
+      if (!parsed.itens?.length) throw new Error('Nenhum item encontrado na imagem. Tente uma foto mais clara.')
+
+      const itensProcessados = parsed.itens.map((item, i) => {
         const sugestoes = produtos.filter(p =>
           p.ativo && p.nome.toLowerCase().includes((item.nome || '').toLowerCase().slice(0, 4))
         ).slice(0, 5)
@@ -361,9 +436,19 @@ export default function EntradaEstoque() {
             </div>
           )}
 
+          {!config?.geminiApiKey?.trim() && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+              <AlertCircle size={18} className="text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm text-amber-800 font-semibold">Chave Gemini não configurada</p>
+                <p className="text-xs text-amber-700 mt-0.5">Vá em <strong>Configurações → Entrada de Estoque por IA</strong> e adicione sua chave gratuita do Google.</p>
+              </div>
+            </div>
+          )}
+
           <button
             onClick={analisarNota}
-            disabled={!imagem || etapa === 'analisando'}
+            disabled={!imagem || etapa === 'analisando' || !config?.geminiApiKey?.trim()}
             className="w-full flex items-center justify-center gap-3 bg-violet-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-violet-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {etapa === 'analisando' ? (

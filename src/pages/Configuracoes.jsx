@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Save, Store, CheckCircle, Copy, Link2, AlertCircle, Wifi, WifiOff, Loader2, ExternalLink } from 'lucide-react'
+import { Save, Store, CheckCircle, Copy, Link2, AlertCircle, Wifi, WifiOff, Loader2, ExternalLink, Eye, EyeOff } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { supabase } from '../lib/supabase'
 
@@ -8,6 +8,7 @@ export default function Configuracoes() {
   const [form, setForm] = useState({ ...config })
   const [salvo, setSalvo] = useState(false)
 
+  const [mostrarChave, setMostrarChave] = useState(false)
   const [copiado, setCopiado] = useState(false)
   const [codigoSync, setCodigoSync] = useState('')
   const [sincMsg, setSincMsg] = useState('')
@@ -182,23 +183,55 @@ export default function Configuracoes() {
       </div>
 
       {/* Config IA */}
-      <div className="bg-violet-50 border border-violet-200 rounded-2xl p-5 space-y-3">
+      <div className="bg-violet-50 border border-violet-200 rounded-2xl p-5 space-y-4">
         <div className="flex items-center gap-2">
           <span className="text-lg">✨</span>
           <h3 className="font-semibold text-violet-800">Entrada de Estoque por IA</h3>
         </div>
         <p className="text-sm text-violet-700">
-          A leitura de notas usa o <strong>Google Gemini Flash</strong> (gratuito até 1 milhão de tokens/dia).
+          Cole sua chave gratuita do <strong>Google Gemini</strong> para ativar a leitura de notas. Cada conta tem <strong>1.500 análises/dia grátis</strong>.
         </p>
-        <div className="bg-white rounded-xl border border-violet-200 p-4 text-sm text-violet-700 space-y-2">
-          <p className="font-medium">Como configurar:</p>
+
+        <div>
+          <label className="block text-sm font-medium text-violet-800 mb-1.5">Chave Gemini API</label>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <input
+                type={mostrarChave ? 'text' : 'password'}
+                value={form.geminiApiKey || ''}
+                onChange={e => setForm(p => ({ ...p, geminiApiKey: e.target.value }))}
+                placeholder="AIzaSy..."
+                className="w-full border-2 border-violet-200 rounded-xl px-4 py-2.5 pr-10 focus:outline-none focus:border-violet-500 font-mono text-sm bg-white"
+              />
+              <button
+                type="button"
+                onClick={() => setMostrarChave(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-violet-400 hover:text-violet-600"
+              >
+                {mostrarChave ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+          </div>
+          {form.geminiApiKey ? (
+            <p className="text-xs text-green-600 mt-1.5 flex items-center gap-1">
+              <CheckCircle size={12} /> Chave configurada — salve para ativar
+            </p>
+          ) : (
+            <p className="text-xs text-violet-500 mt-1.5">Sem chave, a função Nota IA não funciona.</p>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl border border-violet-200 p-4 text-sm text-violet-700 space-y-1.5">
+          <p className="font-medium">Como obter a chave (2 minutos):</p>
           <ol className="list-decimal list-inside space-y-1 text-violet-600">
-            <li>Acesse <strong>aistudio.google.com/apikey</strong> — crie uma chave gratuita</li>
-            <li>No painel Vercel do projeto, vá em Settings → Environment Variables</li>
-            <li>Adicione: <code className="bg-violet-100 px-1.5 py-0.5 rounded font-mono text-xs">GEMINI_API_KEY</code> = sua chave</li>
-            <li>Faça um novo deploy (push no GitHub)</li>
+            <li>Clique em "Abrir Google AI Studio" abaixo</li>
+            <li>Faça login com sua conta Google</li>
+            <li>Clique em <strong>"Create API key"</strong></li>
+            <li>Copie a chave e cole aqui acima</li>
+            <li>Clique em <strong>Salvar configurações</strong></li>
           </ol>
         </div>
+
         <a
           href="https://aistudio.google.com/apikey"
           target="_blank"

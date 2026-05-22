@@ -82,7 +82,7 @@ export function AppProvider({ children }) {
 
   const [config, setConfig] = useState(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.config)
-    return saved ? JSON.parse(saved) : { nomeMercadinho: 'Meu Mercadinho', endereco: '', telefone: '' }
+    return saved ? JSON.parse(saved) : { nomeMercadinho: 'Meu Mercadinho', endereco: '', telefone: '', geminiApiKey: '' }
   })
 
   const [listas, setListas] = useState(() => {
@@ -134,11 +134,12 @@ export function AppProvider({ children }) {
       if (pRes.data?.length > 0) {
         setProdutos(pRes.data.map(fromDbProduto))
         setVendas((vRes.data || []).map(fromDbVenda))
-        if (cRes.data) setConfig({
+        if (cRes.data) setConfig(prev => ({
+          geminiApiKey: prev.geminiApiKey || '',
           nomeMercadinho: cRes.data.nome_mercadinho || 'Meu Mercadinho',
           endereco: cRes.data.endereco || '',
           telefone: cRes.data.telefone || '',
-        })
+        }))
         setListas((lRes.data || []).map(fromDbLista))
       } else {
         await enviarParaSupabase(lid)
@@ -203,11 +204,12 @@ export function AppProvider({ children }) {
         })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pdv_config', filter: `loja_id=eq.${lid}` },
         ({ new: n }) => {
-          if (n) setConfig({
+          if (n) setConfig(prev => ({
+            geminiApiKey: prev.geminiApiKey || '',
             nomeMercadinho: n.nome_mercadinho || 'Meu Mercadinho',
             endereco: n.endereco || '',
             telefone: n.telefone || '',
-          })
+          }))
         })
       .subscribe()
   }
