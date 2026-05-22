@@ -10,6 +10,8 @@ const STORAGE_KEYS = {
   config: 'pdv_config',
   listas: 'pdv_listas',
   lojaId: 'pdv_loja_id',
+  caixaAtual: 'pdv_caixa_atual',
+  historicosCaixa: 'pdv_historico_caixas',
 }
 
 const produtosPadrao = [
@@ -88,6 +90,16 @@ export function AppProvider({ children }) {
     return saved ? JSON.parse(saved) : []
   })
 
+  const [caixaAtual, setCaixaAtual] = useState(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.caixaAtual)
+    return saved ? JSON.parse(saved) : null
+  })
+
+  const [historicosCaixa, setHistoricosCaixa] = useState(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.historicosCaixa)
+    return saved ? JSON.parse(saved) : []
+  })
+
   const [sincStatus, setSincStatus] = useState('idle') // 'idle' | 'sincronizando' | 'ok' | 'erro'
 
   // ── Persistência localStorage ─────────────────────────────
@@ -95,6 +107,11 @@ export function AppProvider({ children }) {
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.vendas, JSON.stringify(vendas)) }, [vendas])
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.config, JSON.stringify(config)) }, [config])
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.listas, JSON.stringify(listas)) }, [listas])
+  useEffect(() => {
+    if (caixaAtual) localStorage.setItem(STORAGE_KEYS.caixaAtual, JSON.stringify(caixaAtual))
+    else localStorage.removeItem(STORAGE_KEYS.caixaAtual)
+  }, [caixaAtual])
+  useEffect(() => { localStorage.setItem(STORAGE_KEYS.historicosCaixa, JSON.stringify(historicosCaixa)) }, [historicosCaixa])
 
   // ── Supabase: carrega dados e inscreve realtime ───────────
   useEffect(() => {
@@ -386,6 +403,34 @@ export function AppProvider({ children }) {
     if (supabase) await supabase.from('pdv_listas').delete().eq('id', listaId)
   }
 
+  // ── Caixa ─────────────────────────────────────────────────
+  function abrirCaixa(valorInicial) {
+    const novo = {
+      id: uuidv4(),
+      abertura: new Date().toISOString(),
+      valorInicial: Number(valorInicial) || 0,
+      movimentacoes: [],
+      fechamento: null,
+    }
+    setCaixaAtual(novo)
+  }
+
+  function adicionarMovimentacaoCaixa(tipo, valor, motivo) {
+    const mov = { id: uuidv4(), tipo, valor: Number(valor), motivo: motivo || '', data: new Date().toISOString() }
+    setCaixaAtual(prev => ({ ...prev, movimentacoes: [...prev.movimentacoes, mov] }))
+  }
+
+  function fecharCaixa(valorContado) {
+    if (!caixaAtual) return
+    const caixaFechado = {
+      ...caixaAtual,
+      fechamento: new Date().toISOString(),
+      valorContado: Number(valorContado),
+    }
+    setHistoricosCaixa(prev => [caixaFechado, ...prev])
+    setCaixaAtual(null)
+  }
+
   const vendasHoje = vendas.filter(v => new Date(v.data).toDateString() === new Date().toDateString())
   const totalHoje = vendasHoje.reduce((acc, v) => acc + v.total, 0)
 
@@ -417,6 +462,11 @@ export function AppProvider({ children }) {
       concluirLista,
       excluirLista,
       sincronizarComCodigo,
+      caixaAtual,
+      historicosCaixa,
+      abrirCaixa,
+      fecharCaixa,
+      adicionarMovimentacaoCaixa,
     }}>
       {children}
     </AppContext.Provider>

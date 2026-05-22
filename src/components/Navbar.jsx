@@ -1,9 +1,10 @@
 import { NavLink } from 'react-router-dom'
-import { ShoppingCart, Package, History, LayoutDashboard, Settings, ClipboardList, Sparkles, Wifi, WifiOff, Loader2 } from 'lucide-react'
+import { ShoppingCart, Package, History, LayoutDashboard, Settings, ClipboardList, Sparkles, Wifi, WifiOff, Loader2, Vault } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 
 const links = [
   { to: '/', icon: ShoppingCart, label: 'PDV' },
+  { to: '/caixa', icon: Vault, label: 'Caixa' },
   { to: '/produtos', icon: Package, label: 'Produtos' },
   { to: '/reposicao', icon: ClipboardList, label: 'Reposição' },
   { to: '/entrada-estoque', icon: Sparkles, label: 'Nota IA' },
@@ -13,7 +14,7 @@ const links = [
 ]
 
 export default function Navbar() {
-  const { config, produtosBaixoEstoque, sincStatus } = useApp()
+  const { config, produtosBaixoEstoque, sincStatus, caixaAtual } = useApp()
 
   return (
     <nav className="bg-green-700 text-white shadow-lg">
@@ -51,6 +52,9 @@ export default function Navbar() {
                 <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
                   {produtosBaixoEstoque.length}
                 </span>
+              )}
+              {to === '/caixa' && (
+                <span className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full border-2 border-green-700 ${caixaAtual ? 'bg-green-300' : 'bg-gray-400'}`} />
               )}
             </NavLink>
           ))}

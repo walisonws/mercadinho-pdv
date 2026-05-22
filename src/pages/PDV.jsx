@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Search, Trash2, Plus, Minus, ShoppingCart, AlertCircle, CheckCircle, ScanBarcode, Printer } from 'lucide-react'
+import { Search, Trash2, Plus, Minus, ShoppingCart, AlertCircle, CheckCircle, ScanBarcode, Printer, LayoutGrid, X } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import ModalPeso from '../components/ModalPeso'
 import ModalFinalizarVenda from '../components/ModalFinalizarVenda'
@@ -12,7 +12,7 @@ const CATEGORIAS_EMOJI = {
 }
 
 export default function PDV() {
-  const { buscarPorCodigo, buscarPorNome, registrarVenda, config, adicionarCodigoAlternativo } = useApp()
+  const { buscarPorCodigo, buscarPorNome, registrarVenda, config, adicionarCodigoAlternativo, produtos } = useApp()
   const [busca, setBusca] = useState('')
   const [sugestoes, setSugestoes] = useState([])
   const [carrinho, setCarrinho] = useState([])
@@ -21,7 +21,16 @@ export default function PDV() {
   const [vendaConfirmada, setVendaConfirmada] = useState(null)
   const [erro, setErro] = useState('')
   const [codigoDesconhecido, setCodigoDesconhecido] = useState(null)
+  const [modoSelecao, setModoSelecao] = useState(false)
+  const [filtroSelecao, setFiltroSelecao] = useState('')
   const inputRef = useRef(null)
+  const filtroRef = useRef(null)
+
+  const produtosFiltrados = modoSelecao
+    ? (produtos || []).filter(p =>
+        !filtroSelecao || p.nome.toLowerCase().includes(filtroSelecao.toLowerCase())
+      ).sort((a, b) => a.nome.localeCompare(b.nome))
+    : []
 
   const total = carrinho.reduce((acc, item) => acc + item.total, 0)
 
@@ -187,7 +196,7 @@ export default function PDV() {
         )}
 
         {/* Tela inicial — logo e instrução */}
-        {sugestoes.length === 0 && busca.length === 0 && (
+        {sugestoes.length === 0 && busca.length === 0 && !modoSelecao && (
           <div className="flex-1 flex flex-col items-center justify-center text-center select-none mt-8">
             <div className="w-24 h-24 bg-green-100 rounded-3xl flex items-center justify-center mb-5 shadow-sm">
               <span className="text-5xl">🛒</span>
@@ -196,13 +205,70 @@ export default function PDV() {
               {config?.nomeMercadinho || 'Mercadinho PDV'}
             </h2>
             <p className="text-gray-400 text-sm mb-8">Sistema de Ponto de Venda</p>
-            <div className="flex items-center gap-3 bg-white border-2 border-dashed border-gray-200 rounded-2xl px-6 py-4">
+            <div className="flex items-center gap-3 bg-white border-2 border-dashed border-gray-200 rounded-2xl px-6 py-4 mb-4">
               <ScanBarcode size={22} className="text-green-500 shrink-0" />
               <p className="text-sm text-gray-500 text-left leading-snug">
                 Escaneie um código de barras<br />
                 <span className="text-gray-400">ou digite o nome do produto acima</span>
               </p>
             </div>
+            <button
+              onClick={() => { setModoSelecao(true); setTimeout(() => filtroRef.current?.focus(), 50) }}
+              className="flex items-center gap-2 bg-green-600 text-white px-5 py-3 rounded-xl font-semibold hover:bg-green-700 transition-colors shadow-sm"
+            >
+              <LayoutGrid size={18} />
+              Selecionar produto manualmente
+            </button>
+          </div>
+        )}
+
+        {/* Modo seleção manual */}
+        {modoSelecao && (
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="relative flex-1">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  ref={filtroRef}
+                  type="text"
+                  value={filtroSelecao}
+                  onChange={e => setFiltroSelecao(e.target.value)}
+                  placeholder="Filtrar por nome..."
+                  className="w-full pl-9 pr-4 py-2.5 border-2 border-green-300 rounded-xl text-sm focus:outline-none focus:border-green-500 bg-white"
+                />
+              </div>
+              <button
+                onClick={() => { setModoSelecao(false); setFiltroSelecao(''); inputRef.current?.focus() }}
+                className="p-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl text-gray-500 transition-colors"
+                title="Fechar"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {produtosFiltrados.length === 0 ? (
+              <p className="text-center text-gray-400 text-sm mt-8">Nenhum produto encontrado</p>
+            ) : (
+              <div className="flex-1 overflow-y-auto grid grid-cols-2 gap-2 content-start">
+                {produtosFiltrados.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => {
+                      adicionarAoCarrinho(p)
+                      if (p.tipo !== 'peso') {
+                        setFiltroSelecao('')
+                      }
+                    }}
+                    className="bg-white rounded-xl p-3 text-left border-2 border-gray-100 hover:border-green-400 hover:bg-green-50 transition-all shadow-sm active:scale-95"
+                  >
+                    <div className="text-2xl mb-1">{CATEGORIAS_EMOJI[p.categoria] || '📦'}</div>
+                    <p className="text-sm font-semibold text-gray-800 leading-snug line-clamp-2">{p.nome}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{p.tipo === 'peso' ? '/kg' : 'un'}</p>
+                    <p className="text-base font-bold text-green-700 mt-1">R$ {p.preco.toFixed(2)}</p>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

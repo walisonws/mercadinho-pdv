@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard'
 import Configuracoes from './pages/Configuracoes'
 import Reposicao from './pages/Reposicao'
 import EntradaEstoque from './pages/EntradaEstoque'
+import Caixa from './pages/Caixa'
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
           <main className="flex-1">
             <Routes>
               <Route path="/" element={<PDV />} />
+              <Route path="/caixa" element={<Caixa />} />
               <Route path="/produtos" element={<Produtos />} />
               <Route path="/reposicao" element={<Reposicao />} />
               <Route path="/entrada-estoque" element={<EntradaEstoque />} />
