@@ -56,6 +56,16 @@ const toDbVenda = (v, lojaId) => ({
   operador_id: v.operadorId ?? null, operador_nome: v.operadorNome ?? null,
 })
 
+const fromDbOperador = o => ({
+  id: o.id, nome: o.nome, pin: o.pin, ativo: o.ativo,
+  criadoEm: o.criado_em,
+})
+
+const toDbOperador = (o, lojaId) => ({
+  id: o.id, loja_id: lojaId, nome: o.nome, pin: o.pin,
+  ativo: o.ativo ?? true, criado_em: o.criadoEm,
+})
+
 const fromDbLista = l => ({
   id: l.id, nome: l.nome, status: l.status, itens: l.itens,
   dataCriacao: l.data_criacao, dataConclusao: l.data_conclusao,
@@ -140,11 +150,12 @@ export function AppProvider({ children }) {
   async function carregarDoSupabase(lid) {
     setSincStatus('sincronizando')
     try {
-      const [pRes, vRes, cRes, lRes] = await Promise.all([
+      const [pRes, vRes, cRes, lRes, oRes] = await Promise.all([
         supabase.from('pdv_produtos').select('*').eq('loja_id', lid),
         supabase.from('pdv_vendas').select('*').eq('loja_id', lid).order('data', { ascending: false }),
         supabase.from('pdv_config').select('*').eq('loja_id', lid).maybeSingle(),
         supabase.from('pdv_listas').select('*').eq('loja_id', lid),
+        supabase.from('pdv_operadores').select('*').eq('loja_id', lid),
       ])
 
       if (pRes.data?.length > 0) {
@@ -157,6 +168,7 @@ export function AppProvider({ children }) {
           telefone: cRes.data.telefone || '',
         }))
         setListas((lRes.data || []).map(fromDbLista))
+        if (oRes.data?.length > 0) setOperadores(oRes.data.map(fromDbOperador))
       } else {
         await enviarParaSupabase(lid)
       }
@@ -171,6 +183,7 @@ export function AppProvider({ children }) {
     const v = JSON.parse(localStorage.getItem(STORAGE_KEYS.vendas) || '[]')
     const c = JSON.parse(localStorage.getItem(STORAGE_KEYS.config) || '{}')
     const l = JSON.parse(localStorage.getItem(STORAGE_KEYS.listas) || '[]')
+    const o = JSON.parse(localStorage.getItem(STORAGE_KEYS.operadores) || '[]')
     await Promise.all([
       p.length && supabase.from('pdv_produtos').upsert(p.map(pr => toDbProduto(pr, lid))),
       v.length && supabase.from('pdv_vendas').upsert(v.map(ve => toDbVenda(ve, lid))),
@@ -181,6 +194,7 @@ export function AppProvider({ children }) {
         telefone: c.telefone || '',
       }),
       l.length && supabase.from('pdv_listas').upsert(l.map(li => toDbLista(li, lid))),
+      o.length && supabase.from('pdv_operadores').upsert(o.map(op => toDbOperador(op, lid))),
     ])
   }
 
@@ -226,6 +240,19 @@ export function AppProvider({ children }) {
             endereco: n.endereco || '',
             telefone: n.telefone || '',
           }))
+        })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pdv_operadores', filter: `loja_id=eq.${lid}` },
+        ({ eventType, new: n, old: o }) => {
+          if (eventType === 'DELETE') {
+            setOperadores(prev => prev.filter(op => op.id !== o.id))
+          } else {
+            const op = fromDbOperador(n)
+            setOperadores(prev => {
+              const idx = prev.findIndex(x => x.id === op.id)
+              if (idx >= 0) { const next = [...prev]; next[idx] = op; return next }
+              return [...prev, op]
+            })
+          }
         })
       .subscribe()
   }
@@ -427,19 +454,33 @@ export function AppProvider({ children }) {
   }
 
   // ── Operadores ────────────────────────────────────────────
-  function adicionarOperador(nome, pin) {
+  async function adicionarOperador(nome, pin) {
     const novo = { id: uuidv4(), nome, pin, ativo: true, criadoEm: new Date().toISOString() }
     setOperadores(prev => [...prev, novo])
+    if (supabase && lojaId) {
+      try { await supabase.from('pdv_operadores').insert(toDbOperador(novo, lojaId)) } catch {}
+    }
     return novo
   }
 
-  function editarOperador(id, dados) {
-    setOperadores(prev => prev.map(op => op.id === id ? { ...op, ...dados } : op))
+  async function editarOperador(id, dados) {
+    let atualizado
+    setOperadores(prev => prev.map(op => {
+      if (op.id !== id) return op
+      atualizado = { ...op, ...dados }
+      return atualizado
+    }))
+    if (supabase && atualizado && lojaId) {
+      try { await supabase.from('pdv_operadores').update(toDbOperador(atualizado, lojaId)).eq('id', id) } catch {}
+    }
   }
 
-  function excluirOperador(id) {
+  async function excluirOperador(id) {
     setOperadores(prev => prev.filter(op => op.id !== id))
     if (operadorAtivo?.id === id) setOperadorAtivo(null)
+    if (supabase) {
+      try { await supabase.from('pdv_operadores').delete().eq('id', id) } catch {}
+    }
   }
 
   function ativarOperador(operador) {
