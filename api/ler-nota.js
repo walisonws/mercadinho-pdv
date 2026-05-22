@@ -8,8 +8,8 @@ export default async function handler(req, res) {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) return res.status(500).json({ erro: 'GEMINI_API_KEY não configurada' })
 
-  const { imagemBase64, mimeType = 'image/jpeg' } = req.body || {}
-  if (!imagemBase64) return res.status(400).json({ erro: 'Imagem não fornecida' })
+  const { imagemBase64, mimeType = 'image/jpeg', texto } = req.body || {}
+  if (!imagemBase64 && !texto) return res.status(400).json({ erro: 'Imagem ou texto não fornecido' })
 
   const prompt = `Você é um especialista em leitura de notas fiscais brasileiras. Analise a imagem com atenção máxima.
 
@@ -39,6 +39,31 @@ Retorne SOMENTE JSON válido, sem texto adicional:
 
 Se não encontrar itens: {"itens": []}`
 
+  const promptTexto = `Você é um especialista em notas fiscais brasileiras. Analise o texto abaixo, extraído de uma nota fiscal ou fornecido por outra IA, e identifique os produtos.
+
+REGRAS:
+- Ignore linhas de desconto, totais, impostos e informações que não sejam itens
+- Se o mesmo produto aparecer múltiplas vezes, some as quantidades
+- Nome do produto: limpo, sem códigos numéricos no início
+
+Para cada item retorne:
+- nome: nome limpo do produto
+- quantidade: quantidade numérica (number)
+- unidade: "un" para unidade/peça, "kg" para quilogramas, "cx" para caixa, "fd" para fardo, "lt" para litro, "pc" para pacote
+- preco_unitario: preço unitário em reais (number)
+
+TEXTO DA NOTA:
+${texto}
+
+Retorne SOMENTE JSON válido, sem texto adicional:
+{"itens": [{"nome": "Banana Nanica kg", "quantidade": 14.84, "unidade": "kg", "preco_unitario": 4.99}]}
+
+Se não encontrar itens: {"itens": []}`
+
+  const contents = texto
+    ? [{ parts: [{ text: promptTexto }] }]
+    : [{ parts: [{ text: prompt }, { inline_data: { mime_type: mimeType, data: imagemBase64 } }] }]
+
   try {
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
@@ -46,12 +71,7 @@ Se não encontrar itens: {"itens": []}`
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{
-            parts: [
-              { text: prompt },
-              { inline_data: { mime_type: mimeType, data: imagemBase64 } },
-            ],
-          }],
+          contents,
           generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
         }),
       }

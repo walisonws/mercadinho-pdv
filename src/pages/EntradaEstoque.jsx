@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { Camera, Upload, Loader2, CheckCircle, AlertCircle, Package, Search, Plus, X, Sparkles, ChevronDown } from 'lucide-react'
+import { Camera, Upload, Loader2, CheckCircle, AlertCircle, Package, Search, Plus, X, Sparkles, ChevronDown, Scissors, AlignLeft } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 
 const categorias = ['mercearia', 'bebidas', 'frutas', 'verduras', 'carnes', 'frios', 'limpeza', 'higiene', 'outros']
@@ -57,6 +57,52 @@ export default function EntradaEstoque() {
   const [erroApi, setErroApi] = useState('')
   const [itens, setItens] = useState([])
   const [melhorarImagem, setMelhorarImagem] = useState(false)
+  const [modoCorte, setModoCorte] = useState(false)
+  const [modoColar, setModoColar] = useState(false)
+  const [textoNota, setTextoNota] = useState('')
+
+  function handleCrop(blob) {
+    const file = new File([blob], 'nota_recortada.jpg', { type: 'image/jpeg' })
+    setImagem(file)
+    setImagemPreview(URL.createObjectURL(blob))
+    setModoCorte(false)
+    setErroApi('')
+  }
+
+  async function analisarTexto() {
+    if (!textoNota.trim()) return
+    setEtapa('analisando')
+    setErroApi('')
+    try {
+      const res = await fetch('/api/ler-nota', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texto: textoNota }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.detalhe ? `${data.erro}: ${data.detalhe}` : (data.erro || 'Erro ao analisar'))
+      if (!data.itens?.length) throw new Error('Nenhum item encontrado. Verifique se o texto contém produtos com quantidades e preços.')
+      const itensProcessados = data.itens.map((item, i) => {
+        const sugestoes = produtos.filter(p =>
+          p.ativo && p.nome.toLowerCase().includes((item.nome || '').toLowerCase().slice(0, 4))
+        ).slice(0, 5)
+        const produtoMatch = sugestoes[0] || null
+        return {
+          _id: i, nomeOriginal: item.nome || '', nome: item.nome || '',
+          quantidade: item.quantidade || 1, unidade: normalizarUnidade(item.unidade),
+          precoUnitario: item.preco_unitario || 0,
+          resolucao: produtoMatch ? 'existente' : 'novo',
+          produtoId: produtoMatch?.id || '', sugestoes,
+          categoria: 'mercearia', tipo: 'unidade', selecionarProduto: false, ativo: true,
+        }
+      })
+      setItens(itensProcessados)
+      setEtapa('revisao')
+    } catch (err) {
+      setErroApi(err.message)
+      setEtapa('upload')
+    }
+  }
 
   function handleArquivo(file) {
     if (!file || !file.type.startsWith('image/')) return
@@ -170,13 +216,26 @@ export default function EntradaEstoque() {
       {/* Etapa: upload */}
       {(etapa === 'upload' || etapa === 'analisando') && (
         <div className="space-y-4">
+          {/* Ferramenta de recorte */}
+          {modoCorte && imagemPreview && (
+            <CropTool imageSrc={imagemPreview} onCrop={handleCrop} onCancel={() => setModoCorte(false)} />
+          )}
+
           {/* Área de upload */}
-          <div
+          {!modoCorte && <div
             className="bg-white border-2 border-dashed border-gray-200 rounded-2xl p-8 flex flex-col items-center justify-center gap-4 cursor-pointer hover:border-violet-400 hover:bg-violet-50 transition-all"
             onClick={() => fileInputRef.current?.click()}
           >
             {imagemPreview ? (
-              <img src={imagemPreview} alt="Nota" className="max-h-64 rounded-xl object-contain shadow" />
+              <div className="flex flex-col items-center gap-2">
+                <img src={imagemPreview} alt="Nota" className="max-h-64 rounded-xl object-contain shadow" />
+                <button
+                  onClick={e => { e.stopPropagation(); setModoCorte(true) }}
+                  className="flex items-center gap-1.5 text-xs text-violet-600 hover:text-violet-800 font-semibold bg-violet-50 border border-violet-200 px-3 py-1.5 rounded-lg"
+                >
+                  <Scissors size={12} /> Recortar foto
+                </button>
+              </div>
             ) : (
               <>
                 <div className="w-16 h-16 bg-violet-100 rounded-2xl flex items-center justify-center">
@@ -196,8 +255,9 @@ export default function EntradaEstoque() {
               className="hidden"
               onChange={e => handleArquivo(e.target.files[0])}
             />
-          </div>
+          </div>}
 
+          {/* Botões selecionar/câmera — ocultos no modo corte ou colar */}
           {/* Botão câmera para desktop (sem capture) */}
           <div className="flex gap-3">
             <button
@@ -215,6 +275,43 @@ export default function EntradaEstoque() {
               Abrir câmera
             </button>
           </div>
+
+          {/* Toggle: colar texto de outra IA */}
+          <button
+            onClick={() => setModoColar(v => !v)}
+            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition-all text-sm font-medium ${
+              modoColar ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-500'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <AlignLeft size={16} />
+              <span>Colar texto de outra IA</span>
+            </div>
+            <div className={`w-10 h-5 rounded-full transition-colors relative ${modoColar ? 'bg-blue-500' : 'bg-gray-300'}`}>
+              <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${modoColar ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            </div>
+          </button>
+
+          {/* Área de texto quando colar está ativo */}
+          {modoColar && (
+            <div className="space-y-2">
+              <p className="text-xs text-blue-600 font-medium">Cole o texto que o ChatGPT, Gemini ou outra IA extraiu da nota:</p>
+              <textarea
+                value={textoNota}
+                onChange={e => setTextoNota(e.target.value)}
+                placeholder={'Exemplo:\nBanana Nanica 3kg - R$ 4,99/kg\nArroz Tio João 5kg - R$ 24,90\nFeijão Carioca 1kg - R$ 8,50'}
+                className="w-full h-44 border-2 border-blue-200 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:border-blue-500 font-mono"
+              />
+              <button
+                onClick={analisarTexto}
+                disabled={!textoNota.trim() || etapa === 'analisando'}
+                className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors disabled:opacity-40"
+              >
+                {etapa === 'analisando' ? <Loader2 size={18} className="animate-spin" /> : <AlignLeft size={18} />}
+                Analisar texto
+              </button>
+            </div>
+          )}
 
           {/* Toggle: nota escura / papel fino */}
           <button
@@ -235,13 +332,31 @@ export default function EntradaEstoque() {
           </button>
 
           {erroApi && (
-            <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
-              <AlertCircle size={18} className="text-red-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm text-red-700 font-medium">{erroApi}</p>
-                {!melhorarImagem && (
-                  <p className="text-xs text-red-500 mt-1">Tente ativar "Nota escura ou papel fino" e analisar novamente.</p>
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-3">
+              <div className="flex items-start gap-3">
+                <AlertCircle size={18} className="text-red-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm text-red-700 font-medium">{erroApi}</p>
+                  {!melhorarImagem && (
+                    <p className="text-xs text-red-500 mt-1">Tente ativar "Nota escura ou papel fino" e analisar novamente.</p>
+                  )}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                {imagemPreview && (
+                  <button
+                    onClick={() => setModoCorte(true)}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 border-2 border-violet-300 text-violet-700 rounded-xl text-xs font-bold hover:bg-violet-50"
+                  >
+                    <Scissors size={13} /> Recortar foto
+                  </button>
                 )}
+                <button
+                  onClick={() => { setModoColar(true); setErroApi('') }}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 border-2 border-blue-300 text-blue-700 rounded-xl text-xs font-bold hover:bg-blue-50"
+                >
+                  <AlignLeft size={13} /> Colar texto
+                </button>
               </div>
             </div>
           )}
@@ -345,6 +460,77 @@ export default function EntradaEstoque() {
           </button>
         </div>
       )}
+    </div>
+  )
+}
+
+function CropTool({ imageSrc, onCrop, onCancel }) {
+  const [top, setTop] = useState(0)
+  const [bottom, setBottom] = useState(100)
+  const [left, setLeft] = useState(0)
+  const [right, setRight] = useState(100)
+  const imgRef = useRef(null)
+
+  function confirmar() {
+    const img = imgRef.current
+    if (!img) return
+    const canvas = document.createElement('canvas')
+    const natW = img.naturalWidth, natH = img.naturalHeight
+    const x = Math.round((left / 100) * natW)
+    const y = Math.round((top / 100) * natH)
+    const w = Math.round(((right - left) / 100) * natW)
+    const h = Math.round(((bottom - top) / 100) * natH)
+    canvas.width = w
+    canvas.height = h
+    canvas.getContext('2d').drawImage(img, x, y, w, h, 0, 0, w, h)
+    canvas.toBlob(blob => onCrop(blob), 'image/jpeg', 0.92)
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm font-semibold text-gray-700">Arraste os controles para focar nos produtos:</p>
+      <div className="relative select-none rounded-xl overflow-hidden">
+        <img src={imageSrc} className="w-full" style={{ filter: 'brightness(0.3)' }} />
+        <img
+          ref={imgRef}
+          src={imageSrc}
+          className="absolute top-0 left-0 w-full"
+          style={{ clipPath: `inset(${top}% ${100 - right}% ${100 - bottom}% ${left}%)` }}
+          crossOrigin="anonymous"
+        />
+        <div className="absolute pointer-events-none" style={{
+          top: `${top}%`, left: `${left}%`,
+          width: `${right - left}%`, height: `${bottom - top}%`,
+          border: '2px solid #7c3aed', borderRadius: 4,
+        }} />
+      </div>
+
+      <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+        {[
+          { label: 'Cortar topo', value: top, onChange: v => setTop(Math.min(v, bottom - 10)), max: bottom - 10 },
+          { label: 'Cortar base', value: 100 - bottom, onChange: v => setBottom(Math.max(100 - v, top + 10)), max: 100 - top - 10 },
+          { label: 'Cortar esq.', value: left, onChange: v => setLeft(Math.min(v, right - 10)), max: right - 10 },
+          { label: 'Cortar dir.', value: 100 - right, onChange: v => setRight(Math.max(100 - v, left + 10)), max: 100 - left - 10 },
+        ].map(({ label, value, onChange, max }) => (
+          <div key={label}>
+            <label className="block text-xs text-gray-600 font-medium mb-1">{label}: {value}%</label>
+            <input
+              type="range" min={0} max={max} value={value}
+              onChange={e => onChange(+e.target.value)}
+              className="w-full accent-violet-600"
+            />
+          </div>
+        ))}
+      </div>
+
+      <div className="flex gap-3">
+        <button onClick={onCancel} className="flex-1 py-3 border-2 border-gray-200 rounded-xl text-gray-600 font-semibold text-sm hover:bg-gray-50">
+          Cancelar
+        </button>
+        <button onClick={confirmar} className="flex-1 py-3 bg-violet-600 text-white rounded-xl font-semibold text-sm hover:bg-violet-700">
+          Usar recorte
+        </button>
+      </div>
     </div>
   )
 }
