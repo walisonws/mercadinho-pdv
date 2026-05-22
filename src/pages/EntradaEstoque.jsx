@@ -17,7 +17,7 @@ function normalizarUnidade(u = '') {
   return UNIDADES_MAP[u.toLowerCase().trim()] || u
 }
 
-async function comprimirImagem(file, maxWidth = 1280) {
+async function comprimirImagem(file, maxWidth = 2000, melhorar = false) {
   return new Promise(resolve => {
     const img = new Image()
     const url = URL.createObjectURL(file)
@@ -26,7 +26,12 @@ async function comprimirImagem(file, maxWidth = 1280) {
       const canvas = document.createElement('canvas')
       canvas.width = img.width * ratio
       canvas.height = img.height * ratio
-      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+      const ctx = canvas.getContext('2d')
+      if (melhorar) {
+        // aumenta contraste e remove cor para texto ficar mais legível
+        ctx.filter = 'grayscale(1) contrast(1.6) brightness(1.15)'
+      }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
       URL.revokeObjectURL(url)
       canvas.toBlob(blob => {
         const reader = new FileReader()
@@ -35,7 +40,7 @@ async function comprimirImagem(file, maxWidth = 1280) {
           mimeType: 'image/jpeg',
         })
         reader.readAsDataURL(blob)
-      }, 'image/jpeg', 0.85)
+      }, 'image/jpeg', 0.92)
     }
     img.src = url
   })
@@ -50,7 +55,8 @@ export default function EntradaEstoque() {
   const [imagemPreview, setImagemPreview] = useState(null)
   const [etapa, setEtapa] = useState('upload') // 'upload' | 'analisando' | 'revisao' | 'aplicando' | 'concluido'
   const [erroApi, setErroApi] = useState('')
-  const [itens, setItens] = useState([]) // itens retornados pela IA + estado de confirmação
+  const [itens, setItens] = useState([])
+  const [melhorarImagem, setMelhorarImagem] = useState(false)
 
   function handleArquivo(file) {
     if (!file || !file.type.startsWith('image/')) return
@@ -65,7 +71,7 @@ export default function EntradaEstoque() {
     setEtapa('analisando')
     setErroApi('')
     try {
-      const { base64, mimeType } = await comprimirImagem(imagem)
+      const { base64, mimeType } = await comprimirImagem(imagem, 2000, melhorarImagem)
       const res = await fetch('/api/ler-nota', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -210,10 +216,33 @@ export default function EntradaEstoque() {
             </button>
           </div>
 
+          {/* Toggle: nota escura / papel fino */}
+          <button
+            onClick={() => setMelhorarImagem(v => !v)}
+            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 transition-all text-sm font-medium ${
+              melhorarImagem
+                ? 'border-violet-400 bg-violet-50 text-violet-700'
+                : 'border-gray-200 bg-white text-gray-500'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-base">🌗</span>
+              <span>Nota escura ou papel fino</span>
+            </div>
+            <div className={`w-10 h-5 rounded-full transition-colors relative ${melhorarImagem ? 'bg-violet-500' : 'bg-gray-300'}`}>
+              <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${melhorarImagem ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            </div>
+          </button>
+
           {erroApi && (
             <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
               <AlertCircle size={18} className="text-red-600 shrink-0 mt-0.5" />
-              <p className="text-sm text-red-700">{erroApi}</p>
+              <div>
+                <p className="text-sm text-red-700 font-medium">{erroApi}</p>
+                {!melhorarImagem && (
+                  <p className="text-xs text-red-500 mt-1">Tente ativar "Nota escura ou papel fino" e analisar novamente.</p>
+                )}
+              </div>
             </div>
           )}
 

@@ -11,24 +11,37 @@ export default async function handler(req, res) {
   const { imagemBase64, mimeType = 'image/jpeg' } = req.body || {}
   if (!imagemBase64) return res.status(400).json({ erro: 'Imagem não fornecida' })
 
-  const prompt = `Você é um especialista em leitura de notas fiscais e documentos de compra brasileiros.
-Analise a imagem e extraia TODOS os produtos/itens listados, incluindo notas de armazém, notas simples, DANFE ou qualquer documento de compra.
+  const prompt = `Você é um especialista em leitura de notas fiscais brasileiras. Analise a imagem com atenção máxima.
+
+TIPOS DE DOCUMENTO que você pode receber:
+1. DANF-e / NF-e: tabela com colunas Código, Descrição, QTD, V.UN, V.TOTAL
+2. NFC-e (cupom fiscal eletrônico): formato estreito, cada item em 2 linhas:
+   - Linha 1: número do item + código + NOME DO PRODUTO + unidade
+   - Linha 2: quantidade + "Kg" ou "Un" + "x" + preço unitário + valor total
+   Exemplo: "001  576 BANANA NANICA kg" / "3,035 Kg x  4,99  15,14"
+3. Nota de atacado / armazém: formato livre, menos estruturado
+
+REGRAS IMPORTANTES:
+- Ignore anotações manuscritas (valores escritos à mão sobre o impresso)
+- Ignore linhas de "Desconto no item X"
+- Para NFC-e, use o preço da linha 2 (valor numérico após o "x"), não o preço riscado ou manuscrito
+- Nome do produto: use o nome impresso, limpo, sem códigos numéricos no início
+- Se o mesmo produto aparecer múltiplas vezes (ex: BANANA em 4 linhas), some as quantidades em um único item
 
 Para cada item retorne:
-- nome: nome completo do produto (string)
+- nome: nome limpo do produto (ex: "Banana Nanica kg", "Arroz 5kg", "Coca-Cola 2L")
 - quantidade: quantidade numérica (number)
-- unidade: unidade abreviada — use: "un" para unidade/peça, "kg" para quilogramas, "cx" para caixa, "fd" para fardo, "lt" para litro, "pc" para pacote, "sc" para saco
-- preco_unitario: preço unitário em reais (number, somente o número, ex: 18.50)
+- unidade: "un" para unidade/peça, "kg" para quilogramas, "cx" para caixa, "fd" para fardo, "lt" para litro, "pc" para pacote
+- preco_unitario: preço unitário em reais (number, ex: 4.99)
 
-Retorne SOMENTE um JSON válido no seguinte formato, sem explicações:
-{"itens": [{"nome": "Arroz 5kg", "quantidade": 10, "unidade": "un", "preco_unitario": 18.50}]}
+Retorne SOMENTE JSON válido, sem texto adicional:
+{"itens": [{"nome": "Banana Nanica kg", "quantidade": 14.84, "unidade": "kg", "preco_unitario": 4.99}]}
 
-Se não encontrar itens claros, retorne: {"itens": []}
-Abreviações comuns: Fd=fardo, Cx=caixa, Sc=saco, Pc=pacote, Fdo=fundo, Qtd=quantidade, Vl/Vr=valor, Un=unidade, Lt=litro`
+Se não encontrar itens: {"itens": []}`
 
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -39,7 +52,7 @@ Abreviações comuns: Fd=fardo, Cx=caixa, Sc=saco, Pc=pacote, Fdo=fundo, Qtd=qua
               { inline_data: { mime_type: mimeType, data: imagemBase64 } },
             ],
           }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 2048 },
+          generationConfig: { temperature: 0.1, maxOutputTokens: 4096 },
         }),
       }
     )
