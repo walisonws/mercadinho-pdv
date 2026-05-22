@@ -78,7 +78,7 @@ export default function EntradaEstoque() {
         body: JSON.stringify({ imagemBase64: base64, mimeType }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.erro || 'Erro ao analisar nota')
+      if (!res.ok) throw new Error(data.detalhe ? `${data.erro}: ${data.detalhe}` : (data.erro || 'Erro ao analisar nota'))
       if (!data.itens?.length) throw new Error('Nenhum item encontrado na imagem. Tente uma foto mais clara.')
 
       const itensProcessados = data.itens.map((item, i) => {
