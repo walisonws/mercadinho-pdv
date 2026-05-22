@@ -8,78 +8,75 @@ export function imprimirCupom(venda, config = {}) {
   const endereco = config.endereco || ''
   const telefone = config.telefone || ''
 
+  const S = (tag, style, content) => `<${tag} style="${style}">${content}</${tag}>`
+  const HR = '<div style="border-top:1px dashed #000;margin:5px 0"></div>'
+  const C = (content, extra = '') => S('div', `text-align:center;${extra}`, content)
+
   const linhasItens = itens.map(item => {
     const qtdLabel = item.unidadeLabel || `${item.quantidade}x`
-    return `
-      <tr>
-        <td colspan="2" style="padding:2px 0 0;font-weight:bold">${item.nome}</td>
-      </tr>
-      <tr>
-        <td style="padding:0 0 5px;color:#555">${qtdLabel} &times; R$ ${Number(item.preco).toFixed(2)}</td>
-        <td style="text-align:right;padding:0 0 5px;font-weight:bold">R$ ${Number(item.total).toFixed(2)}</td>
-      </tr>`
+    return (
+      S('div', 'font-weight:bold;padding:3px 0 1px', item.nome) +
+      S('div', 'display:flex;justify-content:space-between;padding:0 0 5px;color:#444;font-size:10px',
+        `<span>${qtdLabel} × R$ ${Number(item.preco).toFixed(2)}</span>` +
+        S('span', 'font-weight:bold;color:#000', `R$ ${Number(item.total).toFixed(2)}`)
+      )
+    )
   }).join('')
 
-  const html = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <style>
-    *{margin:0;padding:0;box-sizing:border-box}
-    @page{size:80mm auto;margin:3mm 2mm}
-    body{font-family:'Courier New',Courier,monospace;font-size:11px;width:76mm;color:#000}
-    .c{text-align:center}
-    .b{font-weight:bold}
-    .hr{border:none;border-top:1px dashed #000;margin:5px 0}
-    table{width:100%;border-collapse:collapse}
-    .tot td{font-size:13px;font-weight:bold;padding-top:4px}
-  </style>
-</head>
-<body>
-  <div class="c b" style="font-size:14px;margin-bottom:2px">${nome}</div>
-  ${endereco ? `<div class="c" style="font-size:10px">${endereco}</div>` : ''}
-  ${telefone ? `<div class="c" style="font-size:10px">Tel: ${telefone}</div>` : ''}
-  <div class="c" style="font-size:10px;margin-top:2px">${dataStr} ${horaStr}</div>
+  const cupomHTML =
+    C(nome, 'font-size:14px;font-weight:bold;margin-bottom:2px') +
+    (endereco ? C(endereco, 'font-size:10px') : '') +
+    (telefone ? C(`Tel: ${telefone}`, 'font-size:10px') : '') +
+    C(`${dataStr} ${horaStr}`, 'font-size:10px;margin-top:2px') +
+    HR +
+    S('div', 'font-weight:bold;margin-bottom:3px', 'ITENS') +
+    linhasItens +
+    HR +
+    S('div', 'display:flex;justify-content:space-between;font-size:14px;font-weight:bold;padding:2px 0',
+      '<span>TOTAL</span>' + S('span', '', `R$ ${Number(total).toFixed(2)}`)
+    ) +
+    S('div', 'display:flex;justify-content:space-between;padding-top:4px',
+      S('span', '', formaLabel) +
+      (pagamento === 'dinheiro' && valorRecebido
+        ? S('span', '', `Recebido: R$ ${Number(valorRecebido).toFixed(2)}`)
+        : '')
+    ) +
+    (pagamento === 'dinheiro' && troco > 0
+      ? S('div', 'display:flex;justify-content:space-between;padding-top:2px',
+          '<span>Troco</span>' + S('span', '', `R$ ${Number(troco).toFixed(2)}`))
+      : '') +
+    HR +
+    C('Obrigado pela preferência!', 'font-size:10px;margin-top:4px') +
+    C('Volte sempre!', 'font-size:10px') +
+    '<div style="height:20mm"></div>'
 
-  <hr class="hr">
-  <div class="b" style="margin-bottom:3px">ITENS</div>
-  <table>${linhasItens}</table>
-  <hr class="hr">
+  // Inject receipt as a hidden div; @media print shows only it
+  const div = document.createElement('div')
+  div.id = '__cupom_print__'
+  div.innerHTML = S('div',
+    'font-family:Courier New,Courier,monospace;font-size:11px;color:#000;width:76mm',
+    cupomHTML
+  )
+  document.body.appendChild(div)
 
-  <table>
-    <tr class="tot">
-      <td>TOTAL</td>
-      <td style="text-align:right">R$ ${Number(total).toFixed(2)}</td>
-    </tr>
-    <tr>
-      <td style="padding-top:4px">${formaLabel}</td>
-      ${pagamento === 'dinheiro' && valorRecebido
-        ? `<td style="text-align:right;padding-top:4px">Recebido: R$ ${Number(valorRecebido).toFixed(2)}</td>`
-        : '<td></td>'}
-    </tr>
-    ${pagamento === 'dinheiro' && troco > 0
-      ? `<tr><td style="padding-top:2px">Troco</td><td style="text-align:right;padding-top:2px">R$ ${Number(troco).toFixed(2)}</td></tr>`
-      : ''}
-  </table>
+  const style = document.createElement('style')
+  style.textContent = `
+    @media print {
+      body > *:not(#__cupom_print__) { display: none !important; }
+      #__cupom_print__ { display: block !important; }
+      @page { size: 80mm auto; margin: 3mm 2mm; }
+    }
+    #__cupom_print__ { display: none; }
+  `
+  document.head.appendChild(style)
 
-  <hr class="hr">
-  <div class="c" style="font-size:10px;margin-top:4px">Obrigado pela preferência!</div>
-  <div class="c" style="font-size:10px">Volte sempre!</div>
-  <div style="height:20mm"></div>
-</body>
-</html>`
+  function cleanup() {
+    div.remove()
+    style.remove()
+    window.removeEventListener('afterprint', cleanup)
+  }
+  window.addEventListener('afterprint', cleanup)
+  setTimeout(cleanup, 60000)
 
-  const iframe = document.createElement('iframe')
-  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:none;opacity:0;'
-  document.body.appendChild(iframe)
-
-  const doc = iframe.contentWindow.document
-  doc.open()
-  doc.write(html)
-  doc.close()
-
-  iframe.contentWindow.focus()
-  iframe.contentWindow.print()
-
-  setTimeout(() => document.body.removeChild(iframe), 3000)
+  window.print()
 }
