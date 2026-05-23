@@ -41,9 +41,13 @@ export default function Login() {
     if (!nomeLoja.trim()) { setErro('Informe o nome do seu mercadinho.'); return }
     setCarregando(true)
     try {
-      await registrar(email, senha, nomeLoja)
-      setSucesso('Cadastro realizado! Verifique seu e-mail para confirmar a conta.')
-      setAba('login')
+      const data = await registrar(email, senha, nomeLoja)
+      if (data?.session) {
+        // Email confirmation desabilitado → sessão criada imediatamente, PrivateRoute redireciona
+      } else {
+        setSucesso('Conta criada! Verifique seu e-mail para confirmar antes de entrar.')
+        setAba('login')
+      }
     } catch (err) {
       setErro(traduzirErro(err.message))
     } finally {
