@@ -65,6 +65,17 @@ export function AuthProvider({ children }) {
       options: { data: { loja_id: novoLojaId, nome_loja: nomeLoja } },
     })
     if (error) throw error
+
+    // Se o Supabase não retornou sessão imediata (edge case mesmo com email confirmation OFF),
+    // faz login automático para garantir que o usuário entra direto
+    if (!data.session) {
+      const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+        email,
+        password: senha,
+      })
+      if (!loginError && loginData?.session) return loginData
+    }
+
     return data
   }
 

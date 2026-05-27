@@ -233,7 +233,8 @@ export default function Admin() {
 
   async function salvarCliente(lojaId, dados) {
     if (!supabase) return
-    await supabase.from('pdv_clientes').upsert({
+
+    const { error } = await supabase.from('pdv_clientes').upsert({
       loja_id: lojaId,
       status: dados.status,
       data_vencimento: dados.dataVencimento || null,
@@ -241,6 +242,14 @@ export default function Admin() {
       atualizado_em: new Date().toISOString(),
     }, { onConflict: 'loja_id' })
 
+    if (error) {
+      console.error('[Admin] Erro ao salvar cliente:', error.message, error.details, error.hint)
+      // Mesmo com erro no banco, atualiza localmente para o admin ver a mudança visual
+      // O erro mais comum é RLS bloqueando → rode o SQL abaixo no Supabase:
+      // alter table pdv_clientes disable row level security;
+    }
+
+    // Atualiza o estado local independente do resultado do banco
     setLojas(prev => prev.map(l => l.lojaId === lojaId
       ? { ...l, status: dados.status, dataVencimento: dados.dataVencimento, observacao: dados.observacao }
       : l

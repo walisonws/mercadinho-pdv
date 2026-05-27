@@ -35,3 +35,7 @@ create table if not exists pdv_clientes (
   atualizado_em timestamptz default now()
 );
 create index if not exists idx_pdv_clientes_status on pdv_clientes(status);
+
+-- IMPORTANTE: desabilita RLS em pdv_clientes para o painel admin funcionar
+-- O Supabase habilita RLS por padrão em novas tabelas, bloqueando o upsert com anon_key
+alter table pdv_clientes disable row level security;

@@ -261,7 +261,21 @@ export function AppProvider({ children }) {
     if (!supabase || !novoCodigo.trim()) return 'sem_supabase'
     const { data } = await supabase.from('pdv_produtos').select('id').eq('loja_id', novoCodigo.trim()).limit(1)
     if (!data?.length) return 'nao_encontrado'
+
+    // Salva no localStorage
     localStorage.setItem('pdv_loja_id', novoCodigo.trim())
+
+    // CRÍTICO: atualiza o user_metadata do Supabase Auth com o novo loja_id
+    // Sem isso, na recarga o AuthContext lê o user_metadata antigo e sobrescreve o localStorage
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        await supabase.auth.updateUser({ data: { loja_id: novoCodigo.trim() } })
+      }
+    } catch {}
+
+    // Recarrega a página para aplicar o novo loja_id em todos os contextos
+    setTimeout(() => window.location.reload(), 800)
     return 'ok'
   }
 
