@@ -16,7 +16,6 @@ import EntradaEstoque from './pages/EntradaEstoque'
 import Caixa from './pages/Caixa'
 import RelatorioLucro from './pages/RelatorioLucro'
 import Operadores from './pages/Operadores'
-import Assinatura from './pages/Assinatura'
 import Admin from './pages/Admin'
 
 function OnboardingGuard({ children }) {
@@ -63,7 +62,6 @@ function AppLayout() {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/relatorio-lucro" element={<RelatorioLucro />} />
               <Route path="/operadores" element={<Operadores />} />
-              <Route path="/assinatura" element={<Assinatura />} />
               <Route path="/configuracoes" element={<Configuracoes />} />
             </Routes>
           </main>

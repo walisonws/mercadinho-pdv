@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { ShoppingCart, Package, History, LayoutDashboard, Settings, ClipboardList, Sparkles, Wifi, WifiOff, Loader2, Vault, TrendingUp, Users, Crown } from 'lucide-react'
+import { ShoppingCart, Package, History, LayoutDashboard, Settings, ClipboardList, Sparkles, Wifi, WifiOff, Loader2, Vault, TrendingUp, Users } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 
 const links = [
@@ -12,7 +12,6 @@ const links = [
   { to: '/relatorio-lucro', icon: TrendingUp, label: 'Lucro' },
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/operadores', icon: Users, label: 'Operadores' },
-  { to: '/assinatura', icon: Crown, label: 'Plano' },
   { to: '/configuracoes', icon: Settings, label: 'Config' },
 ]
 
