@@ -20,7 +20,7 @@ function csvEscape(v) {
 
 export default function Configuracoes() {
   const { config, salvarConfig, lojaId, sincStatus, sincronizarComCodigo, produtos, vendas } = useApp()
-  const { sair, user } = useAuth()
+  const { sair } = useAuth()
   const [form, setForm] = useState({ ...config })
   const [salvo, setSalvo] = useState(false)
 
@@ -354,22 +354,22 @@ export default function Configuracoes() {
         </p>
       </div>
 
-      {/* Conta / Sair */}
-      {user && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-gray-700">Conta</p>
-            <p className="text-xs text-gray-400 mt-0.5">{user.email}</p>
-          </div>
-          <button
-            onClick={sair}
-            className="flex items-center gap-2 text-sm text-red-500 hover:text-red-700 font-semibold border border-red-200 hover:border-red-400 px-4 py-2 rounded-xl transition-colors"
-          >
-            <LogOut size={16} />
-            Sair
-          </button>
+      {/* Começar loja nova / desvincular este aparelho */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium text-gray-700">Começar uma loja nova</p>
+          <p className="text-xs text-gray-400 mt-0.5">Desconecta este aparelho e gera um novo código. Os dados da loja na nuvem não são apagados.</p>
         </div>
-      )}
+        <button
+          onClick={() => {
+            if (confirm('Desconectar este aparelho e começar uma loja nova?\n\nOs dados da loja atual continuam salvos na nuvem (acessíveis pelo código). Este aparelho vai começar limpo.')) sair()
+          }}
+          className="flex items-center gap-2 text-sm text-red-500 hover:text-red-700 font-semibold border border-red-200 hover:border-red-400 px-4 py-2 rounded-xl transition-colors whitespace-nowrap"
+        >
+          <LogOut size={16} />
+          Loja nova
+        </button>
+      </div>
     </div>
   )
 }

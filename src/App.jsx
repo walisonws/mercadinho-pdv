@@ -14,7 +14,6 @@ import Configuracoes from './pages/Configuracoes'
 import Reposicao from './pages/Reposicao'
 import EntradaEstoque from './pages/EntradaEstoque'
 import Caixa from './pages/Caixa'
-import Login from './pages/Login'
 import RelatorioLucro from './pages/RelatorioLucro'
 import Operadores from './pages/Operadores'
 import Assinatura from './pages/Assinatura'
@@ -79,7 +78,6 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          <Route path="/login" element={<Login />} />
           {/* Admin não usa PrivateRoute — tem autenticação própria com senha */}
           <Route path="/admin" element={<Admin />} />
           <Route path="/*" element={

@@ -22,8 +22,11 @@ create table if not exists pdv_operadores (
 );
 create index if not exists idx_pdv_operadores_loja on pdv_operadores(loja_id);
 
--- Habilitar Realtime para pdv_operadores:
--- Supabase Dashboard > Database > Replication > habilitar pdv_operadores
+-- Desabilitar RLS em pdv_operadores (igual ao pdv_clientes — sem isso gravações falham silenciosamente)
+alter table pdv_operadores disable row level security;
+
+-- Habilitar Realtime para pdv_operadores
+alter publication supabase_realtime add table pdv_operadores;
 
 -- Tabela de controle de clientes (painel admin)
 create table if not exists pdv_clientes (

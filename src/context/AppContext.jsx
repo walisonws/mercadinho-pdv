@@ -16,16 +16,10 @@ const STORAGE_KEYS = {
   historicosCaixa: 'pdv_historico_caixas',
 }
 
-const produtosPadrao = [
-  { id: uuidv4(), nome: 'Arroz 5kg', codigo: '7896006714055', tipo: 'unidade', preco: 28.90, custoCompra: 0, categoria: 'mercearia', ativo: true, estoque: 10, estoqueMinimo: 3, codigosAlternativos: [] },
-  { id: uuidv4(), nome: 'Feijão 1kg', codigo: '7896006714062', tipo: 'unidade', preco: 8.50, custoCompra: 0, categoria: 'mercearia', ativo: true, estoque: 8, estoqueMinimo: 3, codigosAlternativos: [] },
-  { id: uuidv4(), nome: 'Óleo de Soja 900ml', codigo: '7896036090046', tipo: 'unidade', preco: 7.90, custoCompra: 0, categoria: 'mercearia', ativo: true, estoque: 12, estoqueMinimo: 4, codigosAlternativos: [] },
-  { id: uuidv4(), nome: 'Banana (kg)', codigo: '2000000000001', tipo: 'peso', preco: 4.50, custoCompra: 0, categoria: 'frutas', ativo: true, estoque: 15, estoqueMinimo: 5, codigosAlternativos: [] },
-  { id: uuidv4(), nome: 'Carne Moída (kg)', codigo: '2000000000002', tipo: 'peso', preco: 35.00, custoCompra: 0, categoria: 'carnes', ativo: true, estoque: 8, estoqueMinimo: 3, codigosAlternativos: [] },
-  { id: uuidv4(), nome: 'Refrigerante 2L', codigo: '7891234100013', tipo: 'unidade', preco: 9.00, custoCompra: 0, categoria: 'bebidas', ativo: true, estoque: 20, estoqueMinimo: 6, codigosAlternativos: [] },
-  { id: uuidv4(), nome: 'Macarrão 500g', codigo: '7896005800089', tipo: 'unidade', preco: 4.20, custoCompra: 0, categoria: 'mercearia', ativo: true, estoque: 2, estoqueMinimo: 5, codigosAlternativos: [] },
-  { id: uuidv4(), nome: 'Presunto (kg)', codigo: '2000000000003', tipo: 'peso', preco: 28.00, custoCompra: 0, categoria: 'frios', ativo: true, estoque: 4, estoqueMinimo: 2, codigosAlternativos: [] },
-]
+// Loja nova começa vazia — o lojista cadastra os próprios produtos.
+// (Antes existiam 8 produtos de exemplo que eram empurrados pra nuvem e
+//  poluíam lojas vazias ao vincular dispositivos.)
+const produtosPadrao = []
 
 // ── Mappers Supabase ↔ App ────────────────────────────────
 const fromDbProduto = p => ({
@@ -158,8 +152,17 @@ export function AppProvider({ children }) {
         supabase.from('pdv_operadores').select('*').eq('loja_id', lid),
       ])
 
-      if (pRes.data?.length > 0) {
-        setProdutos(pRes.data.map(fromDbProduto))
+      const lojaTemDados =
+        pRes.data?.length > 0 ||
+        vRes.data?.length > 0 ||
+        lRes.data?.length > 0 ||
+        oRes.data?.length > 0 ||
+        !!cRes.data
+
+      if (lojaTemDados) {
+        // A loja existe na nuvem → ADOTA o que está lá (cada tabela separada),
+        // mesmo que alguma esteja vazia. Nunca empurra dados locais por cima.
+        setProdutos((pRes.data || []).map(fromDbProduto))
         setVendas((vRes.data || []).map(fromDbVenda))
         if (cRes.data) setConfig(prev => ({
           geminiApiKey: prev.geminiApiKey || '',
@@ -168,8 +171,9 @@ export function AppProvider({ children }) {
           telefone: cRes.data.telefone || '',
         }))
         setListas((lRes.data || []).map(fromDbLista))
-        if (oRes.data?.length > 0) setOperadores(oRes.data.map(fromDbOperador))
+        setOperadores((oRes.data || []).map(fromDbOperador))
       } else {
+        // Loja totalmente nova (nada na nuvem) → primeira carga: sobe o local.
         await enviarParaSupabase(lid)
       }
       setSincStatus('ok')
@@ -258,26 +262,24 @@ export function AppProvider({ children }) {
   }
 
   async function sincronizarComCodigo(novoCodigo) {
-    if (!supabase || !novoCodigo.trim()) return 'sem_supabase'
-    // Valida pelo pdv_config (sempre existe ao criar conta) em vez de pdv_produtos
-    const { data } = await supabase.from('pdv_config').select('loja_id').eq('loja_id', novoCodigo.trim()).maybeSingle()
+    const codigo = novoCodigo.trim()
+    if (!supabase || !codigo) return 'sem_supabase'
+    // Já está nesta loja? Nada a fazer.
+    if (codigo === localStorage.getItem('pdv_loja_id')) return 'ok'
+
+    // Valida pelo pdv_config (toda loja salva config) — confirma que o código existe.
+    const { data } = await supabase.from('pdv_config').select('loja_id').eq('loja_id', codigo).maybeSingle()
     if (!data) return 'nao_encontrado'
 
-    // Salva no localStorage
-    localStorage.setItem('pdv_loja_id', novoCodigo.trim())
-    // Marca onboarding como concluído — loja já existe, não precisa mostrar wizard
+    // O loja_id É a identidade. Trocar o código local = virar a mesma loja do outro
+    // dispositivo. Limpa o cache local para não misturar com os dados da loja anterior;
+    // o carregarDoSupabase vai puxar os dados corretos da nuvem após o reload.
+    ;['pdv_produtos', 'pdv_vendas', 'pdv_config', 'pdv_listas', 'pdv_operadores',
+      'pdv_operador_ativo', 'pdv_caixa_atual', 'pdv_historico_caixas'].forEach(k => localStorage.removeItem(k))
+    localStorage.setItem('pdv_loja_id', codigo)
+    // Loja já existe → não mostrar onboarding.
     localStorage.setItem('pdv_onboarding_done', '1')
 
-    // CRÍTICO: atualiza o user_metadata do Supabase Auth com o novo loja_id
-    // Sem isso, na recarga o AuthContext lê o user_metadata antigo e sobrescreve o localStorage
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session) {
-        await supabase.auth.updateUser({ data: { loja_id: novoCodigo.trim() } })
-      }
-    } catch {}
-
-    // Recarrega a página para aplicar o novo loja_id em todos os contextos
     setTimeout(() => window.location.reload(), 800)
     return 'ok'
   }
