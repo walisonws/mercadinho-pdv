@@ -51,6 +51,10 @@ const GEMINI_MODELS = [
   'gemini-2.5-flash-lite',
 ]
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
+// Chave padrão do dono (env do Vercel). Usada quando o cliente não colou a dele,
+// para a Nota IA funcionar sem nenhuma configuração. O campo em Configurações
+// continua valendo como override pessoal.
+const CHAVE_PADRAO = (import.meta.env.VITE_GEMINI_API_KEY || '').trim()
 
 async function chamarGemini(apiKey, contents, modelIdx = 0, tentativa = 0) {
   const model = GEMINI_MODELS[modelIdx] || GEMINI_MODELS[0]
@@ -68,8 +72,13 @@ async function chamarGemini(apiKey, contents, modelIdx = 0, tentativa = 0) {
       code = errJson?.error?.code
       const violations = errJson?.error?.details?.find(d => d['@type']?.includes('QuotaFailure'))?.violations || []
       const quotaZerada = violations.some(v => v.quotaId?.includes('GenerateRequestsPerDay') || v.quotaId?.includes('FreeTier'))
+      const chaveInvalida = errJson?.error?.details?.some(d => d.reason === 'API_KEY_INVALID')
       if (code === 400) {
-        mensagem = 'Chave inválida. Gere uma nova chave em aistudio.google.com/apikey e cole em Configurações.'
+        if (chaveInvalida) {
+          mensagem = 'Chave inválida. Gere uma nova chave em aistudio.google.com/apikey e cole em Configurações.'
+        } else {
+          mensagem = 'Não consegui ler esta nota (imagem ilegível ou formato não suportado). Tente uma foto mais nítida e reta, ou recorte só a parte dos itens.'
+        }
       } else if (code === 429 || code === 403) {
         if (quotaZerada) {
           mensagem = 'Cota da chave esgotada (limite 0). Crie uma nova chave gratuita em aistudio.google.com/apikey e cole no campo acima.'
@@ -134,7 +143,7 @@ export default function EntradaEstoque() {
 
   async function analisarTexto() {
     if (!textoNota.trim()) return
-    const apiKey = config?.geminiApiKey?.trim()
+    const apiKey = config?.geminiApiKey?.trim() || CHAVE_PADRAO
     if (!apiKey) {
       setErroApi('Chave Gemini não configurada. Vá em Configurações e adicione sua chave gratuita.')
       return
@@ -198,7 +207,7 @@ Se não encontrar itens: {"itens": []}`
 
   async function analisarNota() {
     if (!imagem) return
-    const apiKey = config?.geminiApiKey?.trim()
+    const apiKey = config?.geminiApiKey?.trim() || CHAVE_PADRAO
     if (!apiKey) {
       setErroApi('Chave Gemini não configurada. Vá em Configurações e adicione sua chave gratuita.')
       return
@@ -327,8 +336,8 @@ Se não encontrar itens: {"itens": []}`
         </div>
       </div>
 
-      {/* Setup inline quando não tem chave */}
-      {!config?.geminiApiKey?.trim() && (
+      {/* Setup inline quando não tem chave (nem a do cliente, nem a padrão do sistema) */}
+      {!config?.geminiApiKey?.trim() && !CHAVE_PADRAO && (
         <div className="bg-gradient-to-br from-violet-50 to-indigo-50 border-2 border-violet-200 rounded-2xl p-6 space-y-5 mb-6">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-violet-600 rounded-2xl flex items-center justify-center shrink-0">
@@ -542,7 +551,7 @@ Se não encontrar itens: {"itens": []}`
 
           <button
             onClick={analisarNota}
-            disabled={!imagem || etapa === 'analisando' || !config?.geminiApiKey?.trim()}
+            disabled={!imagem || etapa === 'analisando' || (!config?.geminiApiKey?.trim() && !CHAVE_PADRAO)}
             className="w-full flex items-center justify-center gap-3 bg-violet-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-violet-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {etapa === 'analisando' ? (
