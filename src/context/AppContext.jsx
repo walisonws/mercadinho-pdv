@@ -259,8 +259,9 @@ export function AppProvider({ children }) {
 
   async function sincronizarComCodigo(novoCodigo) {
     if (!supabase || !novoCodigo.trim()) return 'sem_supabase'
-    const { data } = await supabase.from('pdv_produtos').select('id').eq('loja_id', novoCodigo.trim()).limit(1)
-    if (!data?.length) return 'nao_encontrado'
+    // Valida pelo pdv_config (sempre existe ao criar conta) em vez de pdv_produtos
+    const { data } = await supabase.from('pdv_config').select('loja_id').eq('loja_id', novoCodigo.trim()).maybeSingle()
+    if (!data) return 'nao_encontrado'
 
     // Salva no localStorage
     localStorage.setItem('pdv_loja_id', novoCodigo.trim())
