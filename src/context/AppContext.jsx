@@ -265,6 +265,8 @@ export function AppProvider({ children }) {
 
     // Salva no localStorage
     localStorage.setItem('pdv_loja_id', novoCodigo.trim())
+    // Marca onboarding como concluído — loja já existe, não precisa mostrar wizard
+    localStorage.setItem('pdv_onboarding_done', '1')
 
     // CRÍTICO: atualiza o user_metadata do Supabase Auth com o novo loja_id
     // Sem isso, na recarga o AuthContext lê o user_metadata antigo e sobrescreve o localStorage
