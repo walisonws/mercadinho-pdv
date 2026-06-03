@@ -75,6 +75,11 @@ async function chamarGemini(apiKey, contents, modelIdx = 0, tentativa = 0) {
       const chaveInvalida = errJson?.error?.details?.some(d => d.reason === 'API_KEY_INVALID')
       if (code === 400) {
         if (chaveInvalida) {
+          // Auto-cura: se a chave colada pelo cliente é inválida (ex: sobrou uma
+          // chave velha no aparelho), tenta automaticamente a chave padrão do sistema.
+          if (CHAVE_PADRAO && apiKey !== CHAVE_PADRAO) {
+            return chamarGemini(CHAVE_PADRAO, contents, 0, 0)
+          }
           mensagem = 'Chave inválida. Gere uma nova chave em aistudio.google.com/apikey e cole em Configurações.'
         } else {
           mensagem = 'Não consegui ler esta nota (imagem ilegível ou formato não suportado). Tente uma foto mais nítida e reta, ou recorte só a parte dos itens.'
