@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { Camera, Upload, Loader2, CheckCircle, AlertCircle, Package, Search, Plus, X, Sparkles, ChevronDown, Scissors, AlignLeft, Key, Eye, EyeOff, ExternalLink } from 'lucide-react'
 import { useApp } from '../context/AppContext'
+import { precoVendaSugerido } from '../utils/precos'
 
 const categorias = ['mercearia', 'bebidas', 'frutas', 'verduras', 'carnes', 'frios', 'limpeza', 'higiene', 'outros']
 
@@ -111,6 +112,7 @@ async function chamarGemini(apiKey, contents, modelIdx = 0, tentativa = 0) {
 
 export default function EntradaEstoque() {
   const { produtos, adicionarProduto, editarProduto, config, salvarConfig } = useApp()
+  const [margem, setMargem] = useState(config?.margemPadrao ?? 30)
   const fileInputRef = useRef(null)
   const cameraRef = useRef(null)
 
@@ -189,6 +191,8 @@ Se não encontrar itens: {"itens": []}`
           _id: i, nomeOriginal: item.nome || '', nome: item.nome || '',
           quantidade: item.quantidade || 1, unidade: normalizarUnidade(item.unidade),
           precoUnitario: item.preco_unitario || 0,
+          precoVenda: precoVendaSugerido(item.preco_unitario || 0, margem),
+          vendaEditada: false,
           resolucao: produtoMatch ? 'existente' : 'novo',
           produtoId: produtoMatch?.id || '', sugestoes,
           categoria: 'mercearia', tipo: 'unidade', selecionarProduto: false, ativo: true,
@@ -267,6 +271,8 @@ Se não encontrar itens: {"itens": []}`
           quantidade: item.quantidade || 1,
           unidade: normalizarUnidade(item.unidade),
           precoUnitario: item.preco_unitario || 0,
+          precoVenda: precoVendaSugerido(item.preco_unitario || 0, margem),
+          vendaEditada: false,
           resolucao: produtoMatch ? 'existente' : 'novo',
           produtoId: produtoMatch?.id || '',
           sugestoes,
@@ -285,7 +291,22 @@ Se não encontrar itens: {"itens": []}`
   }
 
   function atualizarItem(id, campo, valor) {
-    setItens(prev => prev.map(i => i._id === id ? { ...i, [campo]: valor } : i))
+    setItens(prev => prev.map(i => {
+      if (i._id !== id) return i
+      const atualizado = { ...i, [campo]: valor }
+      if (campo === 'precoVenda') atualizado.vendaEditada = true
+      if (campo === 'precoUnitario' && !atualizado.vendaEditada) {
+        atualizado.precoVenda = precoVendaSugerido(valor || 0, margem)
+      }
+      return atualizado
+    }))
+  }
+
+  function alterarMargem(novaMargem) {
+    setMargem(novaMargem)
+    setItens(prev => prev.map(i =>
+      i.vendaEditada ? i : { ...i, precoVenda: precoVendaSugerido(i.precoUnitario || 0, novaMargem) }
+    ))
   }
 
   function removerItem(id) {
@@ -594,6 +615,22 @@ Se não encontrar itens: {"itens": []}`
             <button onClick={reiniciar} className="text-sm text-gray-400 hover:text-gray-600 flex items-center gap-1">
               <X size={14} /> Nova nota
             </button>
+          </div>
+
+          <div className="flex items-center gap-3 bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 mb-4">
+            <span className="text-sm font-semibold text-violet-800">Margem de lucro</span>
+            <input
+              type="number"
+              min={0}
+              step="1"
+              value={margem}
+              onChange={e => alterarMargem(parseFloat(e.target.value) || 0)}
+              className="w-20 border-2 border-violet-200 rounded-lg px-3 py-1.5 text-sm font-bold text-violet-800 focus:outline-none focus:border-violet-500"
+            />
+            <span className="text-sm font-semibold text-violet-800">%</span>
+            <span className="text-xs text-violet-600 ml-auto hidden sm:block">
+              Aplica em todos. Você pode ajustar a venda item a item.
+            </span>
           </div>
 
           <div className="space-y-3 mb-5">
