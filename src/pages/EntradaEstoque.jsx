@@ -322,7 +322,8 @@ Se não encontrar itens: {"itens": []}`
         if (produto) {
           await editarProduto(item.produtoId, {
             estoque: (produto.estoque || 0) + item.quantidade,
-            preco: item.precoUnitario || produto.preco,
+            custoCompra: item.precoUnitario || produto.custoCompra || 0,
+            preco: item.precoVenda || produto.preco,
           })
         }
       } else if (item.resolucao === 'novo') {
@@ -330,12 +331,16 @@ Se não encontrar itens: {"itens": []}`
           nome: item.nome,
           codigo: `2${Date.now()}${Math.random().toString().slice(2, 5)}`.slice(0, 13),
           tipo: item.tipo,
-          preco: item.precoUnitario || 0,
+          preco: item.precoVenda || 0,
+          custoCompra: item.precoUnitario || 0,
           categoria: item.categoria,
           estoque: item.quantidade,
           estoqueMinimo: 0,
         })
       }
+    }
+    if (margem !== (config?.margemPadrao ?? 30)) {
+      await salvarConfig({ ...config, margemPadrao: margem })
     }
     setEtapa('concluido')
   }
