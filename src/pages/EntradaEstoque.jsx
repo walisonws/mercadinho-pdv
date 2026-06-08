@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { Camera, Upload, Loader2, CheckCircle, AlertCircle, Package, Search, Plus, X, Sparkles, ChevronDown, Scissors, AlignLeft, Key, Eye, EyeOff, ExternalLink } from 'lucide-react'
 import { useApp } from '../context/AppContext'
+import { precoVendaSugerido } from '../utils/precos'
 
 const categorias = ['mercearia', 'bebidas', 'frutas', 'verduras', 'carnes', 'frios', 'limpeza', 'higiene', 'outros']
 
@@ -111,6 +112,7 @@ async function chamarGemini(apiKey, contents, modelIdx = 0, tentativa = 0) {
 
 export default function EntradaEstoque() {
   const { produtos, adicionarProduto, editarProduto, config, salvarConfig } = useApp()
+  const [margem, setMargem] = useState(config?.margemPadrao ?? 30)
   const fileInputRef = useRef(null)
   const cameraRef = useRef(null)
 
@@ -189,6 +191,8 @@ Se não encontrar itens: {"itens": []}`
           _id: i, nomeOriginal: item.nome || '', nome: item.nome || '',
           quantidade: item.quantidade || 1, unidade: normalizarUnidade(item.unidade),
           precoUnitario: item.preco_unitario || 0,
+          precoVenda: precoVendaSugerido(item.preco_unitario || 0, margem),
+          vendaEditada: false,
           resolucao: produtoMatch ? 'existente' : 'novo',
           produtoId: produtoMatch?.id || '', sugestoes,
           categoria: 'mercearia', tipo: 'unidade', selecionarProduto: false, ativo: true,
@@ -267,6 +271,8 @@ Se não encontrar itens: {"itens": []}`
           quantidade: item.quantidade || 1,
           unidade: normalizarUnidade(item.unidade),
           precoUnitario: item.preco_unitario || 0,
+          precoVenda: precoVendaSugerido(item.preco_unitario || 0, margem),
+          vendaEditada: false,
           resolucao: produtoMatch ? 'existente' : 'novo',
           produtoId: produtoMatch?.id || '',
           sugestoes,
@@ -285,7 +291,22 @@ Se não encontrar itens: {"itens": []}`
   }
 
   function atualizarItem(id, campo, valor) {
-    setItens(prev => prev.map(i => i._id === id ? { ...i, [campo]: valor } : i))
+    setItens(prev => prev.map(i => {
+      if (i._id !== id) return i
+      const atualizado = { ...i, [campo]: valor }
+      if (campo === 'precoVenda') atualizado.vendaEditada = true
+      if (campo === 'precoUnitario' && !atualizado.vendaEditada) {
+        atualizado.precoVenda = precoVendaSugerido(valor || 0, margem)
+      }
+      return atualizado
+    }))
+  }
+
+  function alterarMargem(novaMargem) {
+    setMargem(novaMargem)
+    setItens(prev => prev.map(i =>
+      i.vendaEditada ? i : { ...i, precoVenda: precoVendaSugerido(i.precoUnitario || 0, novaMargem) }
+    ))
   }
 
   function removerItem(id) {
@@ -301,7 +322,8 @@ Se não encontrar itens: {"itens": []}`
         if (produto) {
           await editarProduto(item.produtoId, {
             estoque: (produto.estoque || 0) + item.quantidade,
-            preco: item.precoUnitario || produto.preco,
+            custoCompra: item.precoUnitario || produto.custoCompra || 0,
+            preco: item.precoVenda || produto.preco,
           })
         }
       } else if (item.resolucao === 'novo') {
@@ -309,12 +331,16 @@ Se não encontrar itens: {"itens": []}`
           nome: item.nome,
           codigo: `2${Date.now()}${Math.random().toString().slice(2, 5)}`.slice(0, 13),
           tipo: item.tipo,
-          preco: item.precoUnitario || 0,
+          preco: item.precoVenda || 0,
+          custoCompra: item.precoUnitario || 0,
           categoria: item.categoria,
           estoque: item.quantidade,
           estoqueMinimo: 0,
         })
       }
+    }
+    if (margem !== (config?.margemPadrao ?? 30)) {
+      await salvarConfig({ ...config, margemPadrao: margem })
     }
     setEtapa('concluido')
   }
@@ -596,6 +622,22 @@ Se não encontrar itens: {"itens": []}`
             </button>
           </div>
 
+          <div className="flex items-center gap-3 bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 mb-4">
+            <span className="text-sm font-semibold text-violet-800">Margem de lucro</span>
+            <input
+              type="number"
+              min={0}
+              step="1"
+              value={margem}
+              onChange={e => alterarMargem(parseFloat(e.target.value) || 0)}
+              className="w-20 border-2 border-violet-200 rounded-lg px-3 py-1.5 text-sm font-bold text-violet-800 focus:outline-none focus:border-violet-500"
+            />
+            <span className="text-sm font-semibold text-violet-800">%</span>
+            <span className="text-xs text-violet-600 ml-auto hidden sm:block">
+              Aplica em todos. Você pode ajustar a venda item a item.
+            </span>
+          </div>
+
           <div className="space-y-3 mb-5">
             {itens.map(item => (
               <ItemRevisao
@@ -750,10 +792,18 @@ function ItemRevisao({ item, produtos, onAtualizar, onRemover }) {
 
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-gray-800 text-sm leading-tight">{item.nomeOriginal}</p>
-            <div className="flex items-center gap-3 mt-1">
+            <div className="flex items-center gap-3 mt-1 flex-wrap">
               <span className="text-xs text-gray-400">{item.quantidade} {item.unidade}</span>
               {item.precoUnitario > 0 && (
-                <span className="text-xs font-medium text-green-700">R$ {item.precoUnitario.toFixed(2)}/un</span>
+                <span className="text-xs text-gray-500">custo R$ {item.precoUnitario.toFixed(2)}</span>
+              )}
+              {item.precoVenda > 0 && (
+                <span className="text-xs font-semibold text-green-700">venda R$ {item.precoVenda.toFixed(2)}</span>
+              )}
+              {item.precoVenda > 0 && item.precoUnitario > 0 && (
+                <span className="text-xs font-medium text-emerald-600">
+                  lucro R$ {(item.precoVenda - item.precoUnitario).toFixed(2)}
+                </span>
               )}
             </div>
 
@@ -794,7 +844,7 @@ function ItemRevisao({ item, produtos, onAtualizar, onRemover }) {
       {expandido && (
         <div className="border-t bg-gray-50 p-4 space-y-4">
           {/* Quantidade e preço */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Quantidade</label>
               <input
@@ -805,7 +855,7 @@ function ItemRevisao({ item, produtos, onAtualizar, onRemover }) {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Preço unitário (R$)</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Custo (R$)</label>
               <input
                 type="number"
                 step="0.01"
@@ -814,7 +864,23 @@ function ItemRevisao({ item, produtos, onAtualizar, onRemover }) {
                 className="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-violet-500"
               />
             </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Venda (R$)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={item.precoVenda}
+                onChange={e => onAtualizar('precoVenda', parseFloat(e.target.value) || 0)}
+                className="w-full border-2 border-green-200 rounded-xl px-3 py-2 text-sm font-semibold text-green-700 focus:outline-none focus:border-green-500"
+              />
+            </div>
           </div>
+
+          {item.precoVenda > 0 && item.precoUnitario > 0 && (
+            <p className="text-xs text-emerald-600 font-medium -mt-2">
+              Lucro por unidade: R$ {(item.precoVenda - item.precoUnitario).toFixed(2)}
+            </p>
+          )}
 
           {/* Vincular a produto existente vs novo */}
           <div>

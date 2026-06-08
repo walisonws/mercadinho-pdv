@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { Plus, Search, Edit2, Trash2, Scale, Tag, Filter, AlertTriangle } from 'lucide-react'
+import { Plus, Search, Edit2, Trash2, Scale, Tag, Filter, AlertTriangle, Wrench } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import ModalProduto from '../components/ModalProduto'
+import { precoVendaSugerido } from '../utils/precos'
 
 const CATEGORIAS_EMOJI = {
   mercearia: '🛒', bebidas: '🥤', frutas: '🍎', verduras: '🥦',
@@ -11,12 +12,26 @@ const CATEGORIAS_EMOJI = {
 const CATEGORIAS = ['todas', 'mercearia', 'bebidas', 'frutas', 'verduras', 'carnes', 'frios', 'limpeza', 'higiene', 'outros']
 
 export default function Produtos() {
-  const { produtos, adicionarProduto, editarProduto, excluirProduto } = useApp()
+  const { produtos, adicionarProduto, editarProduto, excluirProduto, config } = useApp()
   const [busca, setBusca] = useState('')
   const [categoria, setCategoria] = useState('todas')
   const [modalAberto, setModalAberto] = useState(false)
   const [produtoEditando, setProdutoEditando] = useState(null)
   const [confirmarExclusao, setConfirmarExclusao] = useState(null)
+  const [corrigirAberto, setCorrigirAberto] = useState(false)
+
+  const margemPadrao = config?.margemPadrao ?? 30
+  const produtosSemCusto = produtos.filter(p => p.ativo && (!p.custoCompra || p.custoCompra === 0) && p.preco > 0)
+
+  async function handleCorrigirCustos() {
+    for (const p of produtosSemCusto) {
+      await editarProduto(p.id, {
+        custoCompra: p.preco,
+        preco: precoVendaSugerido(p.preco, margemPadrao),
+      })
+    }
+    setCorrigirAberto(false)
+  }
 
   const filtrados = produtos.filter(p => {
     const buscaOk = p.nome.toLowerCase().includes(busca.toLowerCase()) ||
@@ -52,13 +67,24 @@ export default function Produtos() {
           <h1 className="text-2xl font-bold text-gray-800">Produtos</h1>
           <p className="text-sm text-gray-500">{produtos.length} produto(s) cadastrado(s)</p>
         </div>
-        <button
-          onClick={() => { setProdutoEditando(null); setModalAberto(true) }}
-          className="flex items-center gap-2 bg-green-600 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-green-700 transition-colors shadow-sm"
-        >
-          <Plus size={18} />
-          Novo Produto
-        </button>
+        <div className="flex items-center gap-2">
+          {produtosSemCusto.length > 0 && (
+            <button
+              onClick={() => setCorrigirAberto(true)}
+              className="flex items-center gap-2 bg-amber-500 text-white px-4 py-2.5 rounded-xl font-semibold hover:bg-amber-600 transition-colors shadow-sm"
+            >
+              <Wrench size={18} />
+              Corrigir custos ({produtosSemCusto.length})
+            </button>
+          )}
+          <button
+            onClick={() => { setProdutoEditando(null); setModalAberto(true) }}
+            className="flex items-center gap-2 bg-green-600 text-white px-5 py-2.5 rounded-xl font-semibold hover:bg-green-700 transition-colors shadow-sm"
+          >
+            <Plus size={18} />
+            Novo Produto
+          </button>
+        </div>
       </div>
 
       {/* Filtros */}
@@ -202,6 +228,42 @@ export default function Produtos() {
                 className="flex-1 bg-red-500 text-white rounded-xl py-2.5 font-bold hover:bg-red-600"
               >
                 Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmar correção de custos */}
+      {corrigirAberto && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full">
+            <h3 className="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2">
+              <Wrench size={18} className="text-amber-500" /> Corrigir custos
+            </h3>
+            <p className="text-gray-600 text-sm mb-3">
+              {produtosSemCusto.length} produto(s) estão sem custo de compra. Esta ação vai:
+            </p>
+            <ul className="text-sm text-gray-600 list-disc pl-5 mb-3 space-y-1">
+              <li>Mover o <strong>preço atual</strong> de cada um para o <strong>custo de compra</strong>.</li>
+              <li>Recalcular a <strong>venda</strong> com margem de <strong>{margemPadrao}%</strong> (terminando em ,49 ou ,99).</li>
+              <li>O <strong>estoque não muda</strong>.</li>
+            </ul>
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-5">
+              Use só se o preço atual desses produtos for, na verdade, o valor que você pagou (caso dos itens lançados pela Nota IA).
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setCorrigirAberto(false)}
+                className="flex-1 border-2 border-gray-200 text-gray-600 rounded-xl py-2.5 font-semibold hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleCorrigirCustos}
+                className="flex-1 bg-amber-500 text-white rounded-xl py-2.5 font-bold hover:bg-amber-600"
+              >
+                Corrigir {produtosSemCusto.length}
               </button>
             </div>
           </div>
