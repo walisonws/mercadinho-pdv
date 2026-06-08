@@ -73,13 +73,28 @@ Exemplos:
 Nenhuma mudança. Já calcula faturamento − custo por período (Hoje / Semana / Mês /
 Total). O filtro "Hoje" é o fechamento de lucro do dia que o lojista pediu.
 
+### Botão "Corrigir custos" (tela Produtos)
+
+Ferramenta para consertar de uma vez os produtos que já entraram com dados
+invertidos (preço de venda = custo, custo 0), **sem mexer no estoque**.
+
+- Botão **"Corrigir custos"** na tela de Produtos.
+- Ao clicar, identifica os produtos com `custoCompra` zerado/vazio e `preco > 0`
+  (caso típico dos itens que entraram pela Nota IA com bug).
+- Mostra um **diálogo de confirmação** com a quantidade de produtos afetados e a
+  explicação: "o preço atual vira o custo, e a venda é recalculada com +30%".
+- Ao confirmar, para cada produto:
+  - `custoCompra = preco` (atual)
+  - `preco = custoCompra × 1,30`, arredondado pela mesma regra (,49/,99)
+  - `estoque` **não muda**.
+- É uma ação pontual de migração. **Cuidado documentado:** ela assume que o
+  `preco` atual representa o custo — verdadeiro para itens vindos da Nota IA com
+  o bug. Por isso exige confirmação explícita antes de aplicar.
+
 ## Fora de escopo (YAGNI)
 
-- Não recalcular automaticamente o preço de produtos **já cadastrados** com dados
-  errados (ex: os que já entraram com custo 0 e venda = custo). Esses podem ser
-  corrigidos manualmente em Produtos → Editar, ou reprocessados numa nova nota.
-  *Observação para o usuário:* os 14 produtos já cadastrados continuarão com
-  custo 0 até serem corrigidos à mão.
+- Relançar a mesma nota para corrigir dados: **não** é o caminho — duplica
+  estoque e pode criar produtos repetidos. Usar o botão "Corrigir custos".
 - Margens diferentes por categoria.
 - Relatórios novos de lucro (a aba existente já cobre).
 
@@ -92,6 +107,8 @@ Total). O filtro "Hoje" é o fechamento de lucro do dia que o lojista pediu.
   só `preco`); persistir `config.margemPadrao` se ainda não existir no schema de
   config. Conferir o fluxo equivalente de Reposição (`marcarItemComprado`) para o
   mesmo mapeamento custo vs. venda.
+- `src/pages/Produtos.jsx` — botão "Corrigir custos" + diálogo de confirmação +
+  aplicação em lote (sem alterar estoque).
 
 ## Critérios de sucesso
 
@@ -101,3 +118,5 @@ Total). O filtro "Hoje" é o fechamento de lucro do dia que o lojista pediu.
    permanecem.
 4. Após salvar, a aba Lucro mostra lucro positivo e correto para os produtos
    vendidos (sem aviso "sem custo").
+5. O botão "Corrigir custos" conserta os produtos já cadastrados com dados
+   invertidos num clique, sem alterar o estoque, após confirmação.
