@@ -787,10 +787,18 @@ function ItemRevisao({ item, produtos, onAtualizar, onRemover }) {
 
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-gray-800 text-sm leading-tight">{item.nomeOriginal}</p>
-            <div className="flex items-center gap-3 mt-1">
+            <div className="flex items-center gap-3 mt-1 flex-wrap">
               <span className="text-xs text-gray-400">{item.quantidade} {item.unidade}</span>
               {item.precoUnitario > 0 && (
-                <span className="text-xs font-medium text-green-700">R$ {item.precoUnitario.toFixed(2)}/un</span>
+                <span className="text-xs text-gray-500">custo R$ {item.precoUnitario.toFixed(2)}</span>
+              )}
+              {item.precoVenda > 0 && (
+                <span className="text-xs font-semibold text-green-700">venda R$ {item.precoVenda.toFixed(2)}</span>
+              )}
+              {item.precoVenda > 0 && item.precoUnitario > 0 && (
+                <span className="text-xs font-medium text-emerald-600">
+                  lucro R$ {(item.precoVenda - item.precoUnitario).toFixed(2)}
+                </span>
               )}
             </div>
 
@@ -831,7 +839,7 @@ function ItemRevisao({ item, produtos, onAtualizar, onRemover }) {
       {expandido && (
         <div className="border-t bg-gray-50 p-4 space-y-4">
           {/* Quantidade e preço */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Quantidade</label>
               <input
@@ -842,7 +850,7 @@ function ItemRevisao({ item, produtos, onAtualizar, onRemover }) {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Preço unitário (R$)</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Custo (R$)</label>
               <input
                 type="number"
                 step="0.01"
@@ -851,7 +859,23 @@ function ItemRevisao({ item, produtos, onAtualizar, onRemover }) {
                 className="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-violet-500"
               />
             </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Venda (R$)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={item.precoVenda}
+                onChange={e => onAtualizar('precoVenda', parseFloat(e.target.value) || 0)}
+                className="w-full border-2 border-green-200 rounded-xl px-3 py-2 text-sm font-semibold text-green-700 focus:outline-none focus:border-green-500"
+              />
+            </div>
           </div>
+
+          {item.precoVenda > 0 && item.precoUnitario > 0 && (
+            <p className="text-xs text-emerald-600 font-medium -mt-2">
+              Lucro por unidade: R$ {(item.precoVenda - item.precoUnitario).toFixed(2)}
+            </p>
+          )}
 
           {/* Vincular a produto existente vs novo */}
           <div>
