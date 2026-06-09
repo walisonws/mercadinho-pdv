@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import { Camera, Upload, Loader2, CheckCircle, AlertCircle, Package, Search, Plus, X, Sparkles, ChevronDown, Scissors, AlignLeft, Key, Eye, EyeOff, ExternalLink } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import { precoVendaSugerido } from '../utils/precos'
+import { precoVendaSugerido, margemEfetiva } from '../utils/precos'
 
 const categorias = ['mercearia', 'bebidas', 'frutas', 'verduras', 'carnes', 'frios', 'limpeza', 'higiene', 'outros']
 
@@ -190,6 +190,7 @@ Se não encontrar itens: {"itens": []}`
           _id: i, nomeOriginal: item.nome || '', nome: item.nome || '',
           quantidade: item.quantidade || 1, unidade: normalizarUnidade(item.unidade),
           precoUnitario: item.preco_unitario || 0,
+          margem,
           precoVenda: precoVendaSugerido(item.preco_unitario || 0, margem),
           vendaEditada: false,
           resolucao: produtoMatch ? 'existente' : 'novo',
@@ -270,6 +271,7 @@ Se não encontrar itens: {"itens": []}`
           quantidade: item.quantidade || 1,
           unidade: normalizarUnidade(item.unidade),
           precoUnitario: item.preco_unitario || 0,
+          margem,
           precoVenda: precoVendaSugerido(item.preco_unitario || 0, margem),
           vendaEditada: false,
           resolucao: produtoMatch ? 'existente' : 'novo',
@@ -293,18 +295,29 @@ Se não encontrar itens: {"itens": []}`
     setItens(prev => prev.map(i => {
       if (i._id !== id) return i
       const atualizado = { ...i, [campo]: valor }
-      if (campo === 'precoVenda') atualizado.vendaEditada = true
-      if (campo === 'precoUnitario' && !atualizado.vendaEditada) {
-        atualizado.precoVenda = precoVendaSugerido(valor || 0, margem)
+      if (campo === 'margem') {
+        atualizado.vendaEditada = true
+        atualizado.precoVenda = precoVendaSugerido(atualizado.precoUnitario || 0, valor || 0)
+      } else if (campo === 'precoVenda') {
+        atualizado.vendaEditada = true
+        atualizado.margem = margemEfetiva(atualizado.precoUnitario || 0, valor || 0)
+      } else if (campo === 'precoUnitario') {
+        if (atualizado.vendaEditada) {
+          // mantém a venda personalizada; só atualiza a % mostrada
+          atualizado.margem = margemEfetiva(valor || 0, atualizado.precoVenda || 0)
+        } else {
+          atualizado.precoVenda = precoVendaSugerido(valor || 0, atualizado.margem ?? 0)
+        }
       }
       return atualizado
     }))
   }
 
-  function alterarMargem(novaMargem) {
-    setMargem(novaMargem)
+  function aplicarMargemTodos() {
     setItens(prev => prev.map(i =>
-      i.vendaEditada ? i : { ...i, precoVenda: precoVendaSugerido(i.precoUnitario || 0, novaMargem) }
+      i.vendaEditada
+        ? i
+        : { ...i, margem, precoVenda: precoVendaSugerido(i.precoUnitario || 0, margem) }
     ))
   }
 
@@ -622,20 +635,26 @@ Se não encontrar itens: {"itens": []}`
           </div>
 
           <div className="flex items-center gap-3 bg-violet-50 border border-violet-200 rounded-xl px-4 py-3 mb-4">
-            <span className="text-sm font-semibold text-violet-800">Margem de lucro</span>
+            <span className="text-sm font-semibold text-violet-800">Margem geral</span>
             <input
               type="number"
               min={0}
               step="1"
               value={margem}
-              onChange={e => alterarMargem(parseFloat(e.target.value) || 0)}
+              onChange={e => setMargem(parseFloat(e.target.value) || 0)}
               className="w-20 border-2 border-violet-200 rounded-lg px-3 py-1.5 text-sm font-bold text-violet-800 focus:outline-none focus:border-violet-500"
             />
             <span className="text-sm font-semibold text-violet-800">%</span>
-            <span className="text-xs text-violet-600 ml-auto hidden sm:block">
-              Aplica em todos. Você pode ajustar a venda item a item.
-            </span>
+            <button
+              onClick={aplicarMargemTodos}
+              className="ml-auto bg-violet-600 text-white text-xs font-bold px-3 py-2 rounded-lg hover:bg-violet-700 transition-colors whitespace-nowrap"
+            >
+              Aplicar a todos
+            </button>
           </div>
+          <p className="text-xs text-violet-600 -mt-2 mb-4 px-1">
+            "Aplicar a todos" muda só os itens que você não ajustou na mão.
+          </p>
 
           <div className="space-y-3 mb-5">
             {itens.map(item => (
@@ -802,6 +821,25 @@ function ItemRevisao({ item, produtos, onAtualizar, onRemover }) {
               {item.precoVenda > 0 && item.precoUnitario > 0 && (
                 <span className="text-xs font-medium text-emerald-600">
                   lucro R$ {(item.precoVenda - item.precoUnitario).toFixed(2)}
+                </span>
+              )}
+            </div>
+
+            {/* Margem (%) editável por item */}
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-xs text-gray-500">Lucro</span>
+              <input
+                type="number"
+                min={0}
+                step="1"
+                value={item.margem ?? 0}
+                onChange={e => onAtualizar('margem', parseFloat(e.target.value) || 0)}
+                className="w-16 border-2 border-violet-200 rounded-lg px-2 py-1 text-sm font-bold text-violet-700 text-center focus:outline-none focus:border-violet-500"
+              />
+              <span className="text-xs text-gray-500">%</span>
+              {item.vendaEditada && (
+                <span className="text-[10px] text-violet-500 font-semibold bg-violet-50 px-1.5 py-0.5 rounded">
+                  personalizado
                 </span>
               )}
             </div>

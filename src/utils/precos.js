@@ -13,3 +13,10 @@ export function precoVendaSugerido(custo, margemPct) {
   const alvo = custo * (1 + (margemPct || 0) / 100)
   return arredondarPreco(alvo)
 }
+
+// Margem (%) efetiva embutida num preço de venda, dado o custo.
+// Usada para mostrar a % real quando o usuário digita a venda em R$ na mão.
+export function margemEfetiva(custo, venda) {
+  if (!custo || custo <= 0) return 0
+  return Math.round((venda / custo - 1) * 100)
+}
