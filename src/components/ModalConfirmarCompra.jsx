@@ -1,16 +1,21 @@
 import { useState } from 'react'
-import { X, Package, RefreshCw, PlusCircle } from 'lucide-react'
+import { RefreshCw, PlusCircle, X } from 'lucide-react'
 import { useApp } from '../context/AppContext'
+import { precoVendaSugerido } from '../utils/precos'
 
 const categorias = ['mercearia', 'bebidas', 'frutas', 'verduras', 'carnes', 'frios', 'limpeza', 'higiene', 'outros']
 
 export default function ModalConfirmarCompra({ item, onConfirmar, onFechar }) {
-  const { produtos, buscarPorNome } = useApp()
+  const { produtos, buscarPorNome, config, salvarConfig } = useApp()
+  const margemPadrao = config?.margemPadrao ?? 30
   const [etapa, setEtapa] = useState('escolha') // 'escolha' | 'mesmo' | 'novo'
   const [form, setForm] = useState({
     resolucao: '',
     quantidadeComprada: '',
     precoComprado: '',
+    margem: margemPadrao,
+    precoVenda: 0,
+    vendaEditada: false,
     produtoId: '',
     nomeProdutoNovo: item.nome,
     codigoNovo: '',
@@ -24,11 +29,39 @@ export default function ModalConfirmarCompra({ item, onConfirmar, onFechar }) {
     setForm(prev => ({ ...prev, [campo]: valor }))
   }
 
+  // Muda o preço pago (custo) → recalcula a venda sugerida (a menos que editada à mão).
+  function setCusto(valor) {
+    setForm(prev => {
+      const custo = parseFloat(valor) || 0
+      const precoVenda = prev.vendaEditada ? prev.precoVenda : precoVendaSugerido(custo, prev.margem)
+      return { ...prev, precoComprado: valor, precoVenda }
+    })
+  }
+
+  function setMargem(valor) {
+    setForm(prev => {
+      const margem = parseFloat(valor) || 0
+      const custo = parseFloat(prev.precoComprado) || 0
+      const precoVenda = prev.vendaEditada ? prev.precoVenda : precoVendaSugerido(custo, margem)
+      return { ...prev, margem, precoVenda }
+    })
+  }
+
+  function setVenda(valor) {
+    setForm(prev => ({ ...prev, precoVenda: parseFloat(valor) || 0, vendaEditada: true }))
+  }
+
+  const custoNum = parseFloat(form.precoComprado) || 0
+  const lucroUnit = (form.precoVenda || 0) - custoNum
+
   function handleConfirmar() {
+    // Persiste a margem como padrão para as próximas reposições.
+    if (form.margem !== margemPadrao) salvarConfig({ ...config, margemPadrao: form.margem })
     onConfirmar({
       ...form,
       quantidadeComprada: parseFloat(form.quantidadeComprada) || 0,
       precoComprado: parseFloat(form.precoComprado) || 0,
+      precoVenda: form.precoVenda || 0,
     })
   }
 
@@ -146,21 +179,26 @@ export default function ModalConfirmarCompra({ item, onConfirmar, onFechar }) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Preço pago (R$)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Preço pago / custo (R$)</label>
                 <input
                   type="number"
                   step="0.01"
                   value={form.precoComprado}
-                  onChange={e => set('precoComprado', e.target.value)}
+                  onChange={e => setCusto(e.target.value)}
                   placeholder="0,00"
                   className="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-blue-500"
                 />
               </div>
             </div>
 
-            {form.produtoId && form.precoComprado && (
+            <PrecificacaoFields
+              form={form} custoNum={custoNum} lucroUnit={lucroUnit}
+              setMargem={setMargem} setVenda={setVenda}
+            />
+
+            {form.produtoId && form.precoComprado > 0 && (
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-700">
-                ✓ Estoque vai aumentar em <strong>{form.quantidadeComprada || 0}</strong> unidades e o preço será atualizado para <strong>R$ {parseFloat(form.precoComprado || 0).toFixed(2)}</strong>
+                ✓ Estoque aumenta em <strong>{form.quantidadeComprada || 0}</strong>, custo vira <strong>R$ {custoNum.toFixed(2)}</strong> e a venda passa a <strong>R$ {(form.precoVenda || 0).toFixed(2)}</strong>
               </div>
             )}
           </div>
@@ -227,22 +265,27 @@ export default function ModalConfirmarCompra({ item, onConfirmar, onFechar }) {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {form.tipoNovo === 'peso' ? 'Preço/kg (R$)' : 'Preço unit. (R$)'}
+                  {form.tipoNovo === 'peso' ? 'Custo/kg pago (R$)' : 'Custo unit. pago (R$)'}
                 </label>
                 <input
                   type="number"
                   step="0.01"
                   value={form.precoComprado}
-                  onChange={e => set('precoComprado', e.target.value)}
+                  onChange={e => setCusto(e.target.value)}
                   placeholder="0,00"
                   className="w-full border-2 border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-green-500"
                 />
               </div>
             </div>
 
-            {form.nomeProdutoNovo && form.precoComprado && (
+            <PrecificacaoFields
+              form={form} custoNum={custoNum} lucroUnit={lucroUnit}
+              setMargem={setMargem} setVenda={setVenda} cor="green"
+            />
+
+            {form.nomeProdutoNovo && form.precoComprado > 0 && (
               <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-sm text-green-700">
-                ✓ <strong>{form.nomeProdutoNovo}</strong> será cadastrado com estoque de <strong>{form.quantidadeComprada || 0}</strong> e preço <strong>R$ {parseFloat(form.precoComprado || 0).toFixed(2)}</strong>
+                ✓ <strong>{form.nomeProdutoNovo}</strong> entra com custo <strong>R$ {custoNum.toFixed(2)}</strong> e venda <strong>R$ {(form.precoVenda || 0).toFixed(2)}</strong> (estoque {form.quantidadeComprada || 0})
               </div>
             )}
           </div>
@@ -266,6 +309,44 @@ export default function ModalConfirmarCompra({ item, onConfirmar, onFechar }) {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+// Campos de precificação: margem (%) + preço de venda editável + lucro por unidade.
+function PrecificacaoFields({ form, custoNum, lucroUnit, setMargem, setVenda, cor = 'blue' }) {
+  if (custoNum <= 0) return null
+  const foco = cor === 'green' ? 'focus:border-green-500' : 'focus:border-blue-500'
+  return (
+    <div className="bg-violet-50 border border-violet-200 rounded-xl p-3 space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-violet-700 mb-1">Margem de lucro (%)</label>
+          <input
+            type="number"
+            value={form.margem}
+            onChange={e => setMargem(e.target.value)}
+            placeholder="30"
+            className={`w-full border-2 border-violet-200 rounded-xl px-3 py-2 focus:outline-none ${foco}`}
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-violet-700 mb-1">Preço de venda (R$)</label>
+          <input
+            type="number"
+            step="0.01"
+            value={form.precoVenda || ''}
+            onChange={e => setVenda(e.target.value)}
+            placeholder="0,00"
+            className={`w-full border-2 border-violet-200 rounded-xl px-3 py-2 focus:outline-none ${foco}`}
+          />
+        </div>
+      </div>
+      <p className="text-xs text-gray-600">
+        Custo <strong>R$ {custoNum.toFixed(2)}</strong> · Venda <strong>R$ {(form.precoVenda || 0).toFixed(2)}</strong> ·{' '}
+        Lucro <strong className={lucroUnit >= 0 ? 'text-green-600' : 'text-red-600'}>R$ {lucroUnit.toFixed(2)}</strong>
+        {form.vendaEditada && <span className="ml-1 text-violet-500">(venda manual)</span>}
+      </p>
     </div>
   )
 }

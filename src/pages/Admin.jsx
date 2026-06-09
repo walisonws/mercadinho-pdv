@@ -3,7 +3,7 @@
  * Senha configurada em VITE_ADMIN_PASSWORD (default: admin123 em dev)
  */
 import { useState, useEffect } from 'react'
-import { Shield, Store, ShoppingBag, Package, Users, TrendingUp, LogOut, Eye, EyeOff, RefreshCw, Crown, Clock, Ban, CheckCircle, ChevronDown, X, Calendar, MessageSquare, AlertTriangle } from 'lucide-react'
+import { Shield, Store, ShoppingBag, Package, Users, LogOut, Eye, EyeOff, RefreshCw, Crown, Clock, Ban, CheckCircle, X, Calendar, MessageSquare, AlertTriangle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'admin123'

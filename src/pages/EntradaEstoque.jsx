@@ -67,7 +67,7 @@ async function chamarGemini(apiKey, contents, modelIdx = 0, tentativa = 0) {
   if (!response.ok) {
     const errText = await response.text()
     let mensagem = 'Erro desconhecido. Tente novamente.'
-    let code = null
+    let code
     try {
       const errJson = JSON.parse(errText)
       code = errJson?.error?.code
@@ -114,7 +114,6 @@ export default function EntradaEstoque() {
   const { produtos, adicionarProduto, editarProduto, config, salvarConfig } = useApp()
   const [margem, setMargem] = useState(config?.margemPadrao ?? 30)
   const fileInputRef = useRef(null)
-  const cameraRef = useRef(null)
 
   const [imagem, setImagem] = useState(null)
   const [imagemPreview, setImagemPreview] = useState(null)

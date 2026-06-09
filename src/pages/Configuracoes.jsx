@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react'
-import { Save, Store, CheckCircle, Copy, Link2, AlertCircle, Wifi, WifiOff, Loader2, ExternalLink, Eye, EyeOff, Download, Upload, FileText, LogOut } from 'lucide-react'
+import { useState } from 'react'
+import { Save, Store, CheckCircle, Copy, Link2, AlertCircle, Wifi, WifiOff, Loader2, ExternalLink, Eye, EyeOff, Download, FileText, LogOut } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -29,8 +29,6 @@ export default function Configuracoes() {
   const [codigoSync, setCodigoSync] = useState('')
   const [sincMsg, setSincMsg] = useState('')
   const [sincLoading, setSincLoading] = useState(false)
-  const [importMsg, setImportMsg] = useState('')
-  const importRef = useRef(null)
 
   function handleSalvar(e) {
     e.preventDefault()

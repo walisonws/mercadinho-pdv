@@ -2,6 +2,8 @@ import { createContext, useContext, useState, useEffect } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
+import { precoVendaSugerido } from '../utils/precos'
+import { deltaEstoqueVenda, aplicarDeltaEstoque } from '../utils/estoque'
 
 const AppContext = createContext()
 
@@ -311,7 +313,7 @@ export function AppProvider({ children }) {
   async function atualizarEstoque(id, delta) {
     const produto = produtos.find(p => p.id === id)
     if (!produto) return
-    const novoEstoque = Math.max(0, (produto.estoque || 0) + delta)
+    const novoEstoque = aplicarDeltaEstoque(produto.estoque, delta)
     setProdutos(prev => prev.map(p => p.id === id ? { ...p, estoque: novoEstoque } : p))
     if (supabase) await supabase.from('pdv_produtos').update({ estoque: novoEstoque }).eq('id', id)
   }
@@ -359,7 +361,7 @@ export function AppProvider({ children }) {
     }
     setVendas(prev => [novaVenda, ...prev])
     venda.itens.forEach(item => {
-      if (item.tipo === 'unidade') atualizarEstoque(item.produtoId, -item.quantidade)
+      atualizarEstoque(item.produtoId, -deltaEstoqueVenda(item))
     })
     if (supabase && lojaId) await supabase.from('pdv_vendas').insert(toDbVenda(novaVenda, lojaId))
     return novaVenda
@@ -419,10 +421,19 @@ export function AppProvider({ children }) {
     if (dados.resolucao === 'mesmo_produto' && dados.produtoId) {
       const produto = produtos.find(p => p.id === dados.produtoId)
       if (produto) {
-        const novoEstoque = (produto.estoque || 0) + (dados.quantidadeComprada || 0)
-        const novoPreco = dados.precoComprado || produto.preco
-        setProdutos(prev => prev.map(p => p.id === dados.produtoId ? { ...p, estoque: novoEstoque, preco: novoPreco } : p))
-        if (supabase) await supabase.from('pdv_produtos').update({ estoque: novoEstoque, preco: novoPreco }).eq('id', dados.produtoId)
+        const novoEstoque = aplicarDeltaEstoque(produto.estoque, dados.quantidadeComprada || 0)
+        const update = { estoque: novoEstoque }
+        const dbUpdate = { estoque: novoEstoque }
+        // Só mexe em custo/preço quando o usuário informou o preço pago de fato.
+        // (O fluxo "Concluir lista" passa apenasEstoque=true → preserva preço e custo.)
+        if (dados.precoComprado && !dados.apenasEstoque) {
+          update.custoCompra = dados.precoComprado
+          update.preco = dados.precoVenda || produto.preco
+          dbUpdate.custo_compra = dados.precoComprado
+          dbUpdate.preco = dados.precoVenda || produto.preco
+        }
+        setProdutos(prev => prev.map(p => p.id === dados.produtoId ? { ...p, ...update } : p))
+        if (supabase) await supabase.from('pdv_produtos').update(dbUpdate).eq('id', dados.produtoId)
       }
     }
 
@@ -431,7 +442,9 @@ export function AppProvider({ children }) {
         nome: dados.nomeProdutoNovo,
         codigo: dados.codigoNovo || `2${Date.now()}`.slice(0, 13),
         tipo: dados.tipoNovo || 'unidade',
-        preco: dados.precoComprado || 0,
+        // O preço pago é o CUSTO; a venda vem da margem (calculada no modal).
+        preco: dados.precoVenda || precoVendaSugerido(dados.precoComprado || 0, dados.margem ?? 30) || 0,
+        custoCompra: dados.precoComprado || 0,
         categoria: dados.categoriaNova || 'mercearia',
         estoque: dados.quantidadeComprada || 0,
         estoqueMinimo: 0,
@@ -477,7 +490,7 @@ export function AppProvider({ children }) {
     const novo = { id: uuidv4(), nome, pin, ativo: true, criadoEm: new Date().toISOString() }
     setOperadores(prev => [...prev, novo])
     if (supabase && lojaId) {
-      try { await supabase.from('pdv_operadores').insert(toDbOperador(novo, lojaId)) } catch {}
+      try { await supabase.from('pdv_operadores').insert(toDbOperador(novo, lojaId)) } catch { /* offline-first: estado local já atualizado */ }
     }
     return novo
   }
@@ -490,7 +503,7 @@ export function AppProvider({ children }) {
       return atualizado
     }))
     if (supabase && atualizado && lojaId) {
-      try { await supabase.from('pdv_operadores').update(toDbOperador(atualizado, lojaId)).eq('id', id) } catch {}
+      try { await supabase.from('pdv_operadores').update(toDbOperador(atualizado, lojaId)).eq('id', id) } catch { /* offline-first: estado local já atualizado */ }
     }
   }
 
@@ -498,7 +511,7 @@ export function AppProvider({ children }) {
     setOperadores(prev => prev.filter(op => op.id !== id))
     if (operadorAtivo?.id === id) setOperadorAtivo(null)
     if (supabase) {
-      try { await supabase.from('pdv_operadores').delete().eq('id', id) } catch {}
+      try { await supabase.from('pdv_operadores').delete().eq('id', id) } catch { /* offline-first: estado local já atualizado */ }
     }
   }
 
