@@ -108,7 +108,9 @@ export default function Reposicao() {
           resolucao: 'mesmo_produto',
           produtoId: prod.id,
           quantidadeComprada: parseFloat(item.quantidade) || 0,
-          precoComprado: prod.preco,
+          // Conclusão automática: só repõe estoque, NÃO altera preço/custo
+          // (não temos o preço pago real aqui).
+          apenasEstoque: true,
         })
       }
     }

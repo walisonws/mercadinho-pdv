@@ -11,8 +11,8 @@ create table if not exists pdv_produtos (
   custo_compra float not null default 0,
   categoria text not null default 'mercearia',
   ativo boolean not null default true,
-  estoque int not null default 0,
-  estoque_minimo int not null default 0,
+  estoque numeric not null default 0,
+  estoque_minimo numeric not null default 0,
   codigos_alternativos jsonb default '[]'::jsonb
 );
 create index if not exists idx_pdv_produtos_loja on pdv_produtos(loja_id);

@@ -6,6 +6,12 @@ alter table pdv_produtos
   add column if not exists custo_compra float not null default 0,
   add column if not exists codigos_alternativos jsonb default '[]'::jsonb;
 
+-- Estoque por peso (kg) precisa de casas decimais → muda int para numeric.
+-- (Sem isso, vender 0,5 kg é arredondado para inteiro no banco.)
+alter table pdv_produtos
+  alter column estoque type numeric,
+  alter column estoque_minimo type numeric;
+
 -- Novas colunas em pdv_vendas
 alter table pdv_vendas
   add column if not exists operador_id text,
