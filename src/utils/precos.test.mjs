@@ -1,4 +1,4 @@
-import { arredondarPreco, precoVendaSugerido } from './precos.js'
+import { arredondarPreco, precoVendaSugerido, margemEfetiva } from './precos.js'
 
 let falhas = 0
 function check(nome, real, esperado) {
@@ -23,6 +23,13 @@ check('arredondar 0', arredondarPreco(0), 0)
 check('venda 7 +30%', precoVendaSugerido(7, 30), 9.49)
 check('venda 1.92 +30%', precoVendaSugerido(1.92, 30), 2.99)
 check('venda 0 +30%', precoVendaSugerido(0, 30), 0)
+
+// margemEfetiva: % de lucro embutida numa venda, dado o custo
+check('efetiva 2 -> 2.99', margemEfetiva(2, 2.99), 50)
+check('efetiva 7 -> 9.49', margemEfetiva(7, 9.49), 36)
+check('efetiva 10 -> 13', margemEfetiva(10, 13), 30)
+check('efetiva custo 0', margemEfetiva(0, 5), 0)
+check('efetiva venda igual custo', margemEfetiva(5, 5), 0)
 
 if (falhas > 0) { console.error(`\n${falhas} teste(s) falharam`); process.exit(1) }
 console.log('\nTodos os testes passaram')
