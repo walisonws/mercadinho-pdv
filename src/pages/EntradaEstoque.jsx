@@ -169,12 +169,13 @@ Para cada item retorne:
 - quantidade: quantidade numérica (number)
 - unidade: "un" para unidade/peça, "kg" para quilogramas, "cx" para caixa, "fd" para fardo, "lt" para litro, "pc" para pacote
 - preco_unitario: preço unitário em reais (number)
+- codigo: código de barras EAN/GTIN do produto (string, somente dígitos, se presente na nota; senão "")
 
 TEXTO DA NOTA:
 ${textoNota}
 
 Retorne SOMENTE JSON válido, sem texto adicional:
-{"itens": [{"nome": "Banana Nanica kg", "quantidade": 14.84, "unidade": "kg", "preco_unitario": 4.99}]}
+{"itens": [{"nome": "Banana Nanica kg", "quantidade": 14.84, "unidade": "kg", "preco_unitario": 4.99, "codigo": "7891234567890"}]}
 
 Se não encontrar itens: {"itens": []}`
       const rawText = await chamarGemini(apiKey, [{ parts: [{ text: promptTexto }] }])
@@ -182,14 +183,17 @@ Se não encontrar itens: {"itens": []}`
       try { const m = rawText.match(/\{[\s\S]*\}/); if (m) parsed = JSON.parse(m[0]) } catch { /* */ }
       if (!parsed.itens?.length) throw new Error('Nenhum item encontrado. Verifique se o texto contém produtos com quantidades e preços.')
       const itensProcessados = parsed.itens.map((item, i) => {
+        const codigoNota = (item.codigo || '').replace(/\D/g, '')
+        const porCodigo = codigoNota ? produtos.find(p => p.ativo && (p.codigo === codigoNota || (p.codigosAlternativos || []).includes(codigoNota))) : null
         const sugestoes = produtos.filter(p =>
           p.ativo && p.nome.toLowerCase().includes((item.nome || '').toLowerCase().slice(0, 4))
         ).slice(0, 5)
-        const produtoMatch = sugestoes[0] || null
+        const produtoMatch = porCodigo || sugestoes[0] || null
         return {
           _id: i, nomeOriginal: item.nome || '', nome: item.nome || '',
           quantidade: item.quantidade || 1, unidade: normalizarUnidade(item.unidade),
           precoUnitario: item.preco_unitario || 0,
+          codigo: codigoNota,
           margem,
           precoVenda: precoVendaSugerido(item.preco_unitario || 0, margem),
           vendaEditada: false,
@@ -247,9 +251,10 @@ Para cada item retorne:
 - quantidade: quantidade numérica (number)
 - unidade: "un" para unidade/peça, "kg" para quilogramas, "cx" para caixa, "fd" para fardo, "lt" para litro, "pc" para pacote
 - preco_unitario: preço unitário em reais (number, ex: 4.99)
+- codigo: código de barras EAN/GTIN do produto (string, somente dígitos, se visível na nota; senão "")
 
 Retorne SOMENTE JSON válido, sem texto adicional:
-{"itens": [{"nome": "Banana Nanica kg", "quantidade": 14.84, "unidade": "kg", "preco_unitario": 4.99}]}
+{"itens": [{"nome": "Banana Nanica kg", "quantidade": 14.84, "unidade": "kg", "preco_unitario": 4.99, "codigo": "7891234567890"}]}
 
 Se não encontrar itens: {"itens": []}`
 
@@ -260,10 +265,12 @@ Se não encontrar itens: {"itens": []}`
       if (!parsed.itens?.length) throw new Error('Nenhum item encontrado na imagem. Tente uma foto mais clara.')
 
       const itensProcessados = parsed.itens.map((item, i) => {
+        const codigoNota = (item.codigo || '').replace(/\D/g, '')
+        const porCodigo = codigoNota ? produtos.find(p => p.ativo && (p.codigo === codigoNota || (p.codigosAlternativos || []).includes(codigoNota))) : null
         const sugestoes = produtos.filter(p =>
           p.ativo && p.nome.toLowerCase().includes((item.nome || '').toLowerCase().slice(0, 4))
         ).slice(0, 5)
-        const produtoMatch = sugestoes[0] || null
+        const produtoMatch = porCodigo || sugestoes[0] || null
         return {
           _id: i,
           nomeOriginal: item.nome || '',
@@ -271,6 +278,7 @@ Se não encontrar itens: {"itens": []}`
           quantidade: item.quantidade || 1,
           unidade: normalizarUnidade(item.unidade),
           precoUnitario: item.preco_unitario || 0,
+          codigo: codigoNota,
           margem,
           precoVenda: precoVendaSugerido(item.preco_unitario || 0, margem),
           vendaEditada: false,
@@ -341,7 +349,7 @@ Se não encontrar itens: {"itens": []}`
       } else if (item.resolucao === 'novo') {
         await adicionarProduto({
           nome: item.nome,
-          codigo: `2${Date.now()}${Math.random().toString().slice(2, 5)}`.slice(0, 13),
+          codigo: item.codigo || `2${Date.now()}${Math.random().toString().slice(2, 5)}`.slice(0, 13),
           tipo: item.tipo,
           preco: item.precoVenda || 0,
           custoCompra: item.precoUnitario || 0,
