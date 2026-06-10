@@ -50,33 +50,18 @@ export function imprimirCupom(venda, config = {}) {
     C('Volte sempre!', 'font-size:10px') +
     '<div style="height:20mm"></div>'
 
-  // Inject receipt as a hidden div; @media print shows only it
-  const div = document.createElement('div')
-  div.id = '__cupom_print__'
-  div.innerHTML = S('div',
-    'font-family:Courier New,Courier,monospace;font-size:11px;color:#000;width:54mm',
-    cupomHTML
-  )
-  document.body.appendChild(div)
+  const pw = window.open('', '_blank', 'width=320,height=600,menubar=no,toolbar=no,location=no,status=no')
+  if (!pw) return
 
-  const style = document.createElement('style')
-  style.textContent = `
-    @media print {
-      body > *:not(#__cupom_print__) { display: none !important; }
-      #__cupom_print__ { display: block !important; }
-      @page { size: 58mm auto; margin: 2mm 1mm; }
-    }
-    #__cupom_print__ { display: none; }
-  `
-  document.head.appendChild(style)
+  pw.document.write(`<!DOCTYPE html><html><head><style>
+    @page { size: 58mm auto; margin: 2mm 1mm; }
+    body { font-family: 'Courier New', Courier, monospace; font-size: 11px; color: #000; width: 54mm; margin: 0; padding: 4px; }
+  </style></head><body>${cupomHTML}</body></html>`)
+  pw.document.close()
 
-  function cleanup() {
-    div.remove()
-    style.remove()
-    window.removeEventListener('afterprint', cleanup)
+  pw.onload = () => {
+    pw.focus()
+    pw.print()
+    pw.onafterprint = () => pw.close()
   }
-  window.addEventListener('afterprint', cleanup)
-  setTimeout(cleanup, 60000)
-
-  window.print()
 }
