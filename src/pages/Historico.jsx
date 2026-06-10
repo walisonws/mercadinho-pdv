@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { Calendar, Banknote, CreditCard, QrCode, ChevronDown, ChevronUp, Receipt } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 
-const FORMA_ICON = { dinheiro: Banknote, cartao: CreditCard, pix: QrCode }
-const FORMA_COR = { dinheiro: 'text-yellow-600 bg-yellow-50', cartao: 'text-blue-600 bg-blue-50', pix: 'text-green-600 bg-green-50' }
-const FORMA_LABEL = { dinheiro: 'Dinheiro', cartao: 'Cartão', pix: 'Pix' }
+const FORMA_ICON = { dinheiro: Banknote, cartao: CreditCard, cartao_debito: CreditCard, cartao_credito: CreditCard, pix: QrCode }
+const FORMA_COR = { dinheiro: 'text-yellow-600 bg-yellow-50', cartao: 'text-blue-600 bg-blue-50', cartao_debito: 'text-blue-600 bg-blue-50', cartao_credito: 'text-indigo-600 bg-indigo-50', pix: 'text-green-600 bg-green-50' }
+const FORMA_LABEL = { dinheiro: 'Dinheiro', cartao: 'Cartão', cartao_debito: 'Cartão Débito', cartao_credito: 'Cartão Crédito', pix: 'Pix' }
 
 export default function Historico() {
   const { vendas } = useApp()

@@ -5,7 +5,13 @@ import { useApp } from '../context/AppContext'
 const FORMA_COR = {
   dinheiro: { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200', icon: Banknote },
   cartao: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', icon: CreditCard },
+  cartao_debito: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200', icon: CreditCard },
+  cartao_credito: { bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200', icon: CreditCard },
   pix: { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200', icon: QrCode },
+}
+
+const FORMA_LABEL = {
+  dinheiro: 'Dinheiro', cartao: 'Cartão', cartao_debito: 'Cartão Débito', cartao_credito: 'Cartão Crédito', pix: 'Pix',
 }
 
 const fmt = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -123,7 +129,7 @@ export default function Dashboard() {
                     <div className="flex items-center justify-between mb-1">
                       <div className={`flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full ${bg} ${text} border ${border}`}>
                         <Icon size={12} />
-                        {forma.charAt(0).toUpperCase() + forma.slice(1)}
+                        {FORMA_LABEL[forma] || forma}
                       </div>
                       <span className="text-sm font-bold text-gray-700">{fmt(valor)}</span>
                     </div>

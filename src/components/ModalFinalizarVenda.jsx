@@ -9,6 +9,7 @@ const formas = [
 
 export default function ModalFinalizarVenda({ total, onConfirmar, onFechar }) {
   const [forma, setForma] = useState('dinheiro')
+  const [subtipoCartao, setSubtipoCartao] = useState('debito')
   const [valorRecebido, setValorRecebido] = useState('')
 
   const recebido = parseFloat(valorRecebido) || 0
@@ -17,7 +18,8 @@ export default function ModalFinalizarVenda({ total, onConfirmar, onFechar }) {
 
   function handleConfirmar() {
     if (!podeConfirmar) return
-    onConfirmar({ forma, valorRecebido: recebido, troco })
+    const formaPagamento = forma === 'cartao' ? `cartao_${subtipoCartao}` : forma
+    onConfirmar({ forma: formaPagamento, valorRecebido: recebido, troco })
   }
 
   return (
@@ -94,12 +96,29 @@ export default function ModalFinalizarVenda({ total, onConfirmar, onFechar }) {
         )}
 
         {forma === 'cartao' && (
-          <div className="mb-5 bg-blue-50 border border-blue-200 rounded-xl p-4 text-center">
-            <CreditCard size={40} className="mx-auto text-blue-600 mb-2" />
-            <p className="text-sm text-blue-700 font-medium">
-              Digite R$ {total.toFixed(2)} na maquininha.<br />
-              Confirme após o pagamento ser aprovado.
-            </p>
+          <div className="mb-5 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              {[{ id: 'debito', label: 'Débito' }, { id: 'credito', label: 'Crédito' }].map(({ id, label }) => (
+                <button
+                  key={id}
+                  onClick={() => setSubtipoCartao(id)}
+                  className={`flex items-center justify-center gap-2 p-3 rounded-xl border-2 font-semibold transition-all text-sm ${
+                    subtipoCartao === id
+                      ? 'border-blue-600 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                  }`}
+                >
+                  <CreditCard size={16} />
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center">
+              <p className="text-sm text-blue-700 font-medium">
+                Digite R$ {total.toFixed(2)} na maquininha.<br />
+                Confirme após o pagamento ser aprovado.
+              </p>
+            </div>
           </div>
         )}
 

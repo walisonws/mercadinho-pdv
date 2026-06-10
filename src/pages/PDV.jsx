@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Search, Trash2, Plus, Minus, ShoppingCart, AlertCircle, CheckCircle, ScanBarcode, Printer, LayoutGrid, X } from 'lucide-react'
+import { Search, Trash2, Plus, Minus, ShoppingCart, AlertCircle, CheckCircle, ScanBarcode, LayoutGrid, X } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import ModalPeso from '../components/ModalPeso'
 import ModalFinalizarVenda from '../components/ModalFinalizarVenda'
@@ -140,10 +140,12 @@ export default function PDV() {
       valorRecebido,
       troco,
     })
-    setVendaConfirmada({ ...venda, troco, forma })
+    const vendaFinalizada = { ...venda, troco, forma }
+    setVendaConfirmada(vendaFinalizada)
     setMostrarFinalizar(false)
     setCarrinho([])
     setBusca('')
+    imprimirCupom(vendaFinalizada, config)
     setTimeout(() => {
       setVendaConfirmada(null)
       inputRef.current?.focus()
@@ -401,17 +403,13 @@ export default function PDV() {
             <p className="text-green-100 text-sm">
               {vendaConfirmada.forma === 'dinheiro'
                 ? `Dinheiro — Troco: R$ ${vendaConfirmada.troco.toFixed(2)}`
-                : vendaConfirmada.forma === 'cartao' ? 'Pago no cartão' : 'Pago via Pix'}
+                : vendaConfirmada.forma === 'cartao_debito' ? 'Pago no cartão débito'
+                : vendaConfirmada.forma === 'cartao_credito' ? 'Pago no cartão crédito'
+                : vendaConfirmada.forma === 'cartao' ? 'Pago no cartão'
+                : 'Pago via Pix'}
             </p>
             <p className="font-semibold mt-1">Total: R$ {vendaConfirmada.total.toFixed(2)}</p>
           </div>
-          <button
-            onClick={() => imprimirCupom(vendaConfirmada, config)}
-            className="bg-white/20 hover:bg-white/30 text-white rounded-xl px-3 py-2 text-sm font-semibold flex items-center gap-1.5 transition-colors shrink-0 mt-0.5"
-          >
-            <Printer size={15} />
-            Imprimir
-          </button>
         </div>
       )}
     </div>

@@ -68,6 +68,8 @@ export default function Caixa() {
   const FORMA = {
     dinheiro: { label: 'Dinheiro', icon: Banknote, cor: 'text-yellow-700', bg: 'bg-yellow-50', border: 'border-yellow-200' },
     cartao: { label: 'Cartão', icon: CreditCard, cor: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200' },
+    cartao_debito: { label: 'Cartão Débito', icon: CreditCard, cor: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200' },
+    cartao_credito: { label: 'Cartão Crédito', icon: CreditCard, cor: 'text-indigo-700', bg: 'bg-indigo-50', border: 'border-indigo-200' },
     pix: { label: 'Pix', icon: QrCode, cor: 'text-green-700', bg: 'bg-green-50', border: 'border-green-200' },
   }
 
