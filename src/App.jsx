@@ -19,7 +19,6 @@ const Caixa = lazy(() => import('./pages/Caixa'))
 const RelatorioLucro = lazy(() => import('./pages/RelatorioLucro'))
 const Operadores = lazy(() => import('./pages/Operadores'))
 const Admin = lazy(() => import('./pages/Admin'))
-const TaxiApp = lazy(() => import('./pages/taxi/TaxiApp'))
 
 function Carregando() {
   return (
@@ -92,8 +91,6 @@ export default function App() {
           <Routes>
             {/* Admin não usa PrivateRoute — tem autenticação própria com senha */}
             <Route path="/admin" element={<Admin />} />
-            {/* App de Recibo de Táxi — sem autenticação, usa localStorage */}
-            <Route path="/taxi/*" element={<TaxiApp />} />
             <Route path="/*" element={
               <PrivateRoute>
                 <AppLayout />
