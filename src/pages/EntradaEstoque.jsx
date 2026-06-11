@@ -1,7 +1,8 @@
 import { useState, useRef } from 'react'
-import { Camera, Upload, Loader2, CheckCircle, AlertCircle, Package, Search, Plus, X, Sparkles, ChevronDown, Scissors, AlignLeft, Key, Eye, EyeOff, ExternalLink } from 'lucide-react'
+import { Camera, Upload, Loader2, CheckCircle, AlertCircle, Package, Search, Plus, X, Sparkles, ChevronDown, Scissors, AlignLeft, Key, Eye, EyeOff, ExternalLink, QrCode } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { precoVendaSugerido, margemEfetiva } from '../utils/precos'
+import ModalQrScanner from '../components/ModalQrScanner'
 
 const categorias = ['mercearia', 'bebidas', 'frutas', 'verduras', 'carnes', 'frios', 'limpeza', 'higiene', 'outros']
 
@@ -128,6 +129,22 @@ export default function EntradaEstoque() {
   const [mostrarChave, setMostrarChave] = useState(false)
   const [salvandoChave, setSalvandoChave] = useState(false)
   const [chaveSalva, setChaveSalva] = useState(false)
+  const [qrScannerAberto, setQrScannerAberto] = useState(false)
+  const [qrMensagem, setQrMensagem] = useState('')
+
+  function handleQrResult(texto) {
+    setQrScannerAberto(false)
+    const ehUrl = /^https?:\/\//i.test(texto)
+    if (ehUrl) {
+      window.open(texto, '_blank')
+      setModoColar(true)
+      setQrMensagem('A nota foi aberta numa nova aba. Selecione tudo (Ctrl+A), copie (Ctrl+C) e cole o texto abaixo.')
+    } else {
+      setTextoNota(texto)
+      setModoColar(true)
+      setQrMensagem('QR Code lido! Confira o texto e clique em Analisar.')
+    }
+  }
 
   async function salvarChave() {
     const chave = chaveInput.trim()
@@ -515,6 +532,15 @@ Se não encontrar itens: {"itens": []}`
             </button>
           </div>
 
+          {/* Botão: escanear QR Code da nota */}
+          <button
+            onClick={() => setQrScannerAberto(true)}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-gray-200 bg-white text-gray-500 hover:border-violet-400 hover:text-violet-700 transition-all text-sm font-medium"
+          >
+            <QrCode size={16} />
+            <span>Escanear QR Code da nota</span>
+          </button>
+
           {/* Toggle: colar texto de outra IA */}
           <button
             onClick={() => setModoColar(v => !v)}
@@ -534,6 +560,11 @@ Se não encontrar itens: {"itens": []}`
           {/* Área de texto quando colar está ativo */}
           {modoColar && (
             <div className="space-y-2">
+              {qrMensagem && (
+                <div className="bg-violet-50 border border-violet-200 rounded-xl px-3 py-2 text-xs text-violet-700 font-medium">
+                  {qrMensagem}
+                </div>
+              )}
               <p className="text-xs text-blue-600 font-medium">Cole o texto que o ChatGPT, Gemini ou outra IA extraiu da nota:</p>
               <textarea
                 value={textoNota}
@@ -720,6 +751,13 @@ Se não encontrar itens: {"itens": []}`
             Lançar outra nota
           </button>
         </div>
+      )}
+
+      {qrScannerAberto && (
+        <ModalQrScanner
+          onResult={handleQrResult}
+          onFechar={() => setQrScannerAberto(false)}
+        />
       )}
     </div>
   )

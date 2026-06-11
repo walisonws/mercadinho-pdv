@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Plus, Search, Edit2, Trash2, Scale, Tag, Filter, AlertTriangle, Wrench } from 'lucide-react'
+import { Plus, Search, Edit2, Trash2, Scale, Tag, Filter, AlertTriangle, Wrench, Printer } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import ModalProduto from '../components/ModalProduto'
 import { precoVendaSugerido } from '../utils/precos'
+import { imprimirEtiqueta } from '../utils/imprimirEtiqueta'
 
 const CATEGORIAS_EMOJI = {
   mercearia: '🛒', bebidas: '🥤', frutas: '🍎', verduras: '🥦',
@@ -180,6 +181,13 @@ export default function Produtos() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-center gap-2">
+                      <button
+                        onClick={() => imprimirEtiqueta(p)}
+                        title="Imprimir etiqueta"
+                        className="p-2 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg transition-colors"
+                      >
+                        <Printer size={16} />
+                      </button>
                       <button
                         onClick={() => handleEditar(p)}
                         className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
