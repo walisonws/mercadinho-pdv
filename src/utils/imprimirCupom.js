@@ -50,18 +50,21 @@ export function imprimirCupom(venda, config = {}) {
     C('Volte sempre!', 'font-size:10px') +
     '<div style="height:20mm"></div>'
 
-  const pw = window.open('', '_blank', 'width=320,height=600,menubar=no,toolbar=no,location=no,status=no')
-  if (!pw) return
+  const iframe = document.createElement('iframe')
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:none;visibility:hidden;'
+  document.body.appendChild(iframe)
 
-  pw.document.write(`<!DOCTYPE html><html><head><style>
+  const doc = iframe.contentDocument || iframe.contentWindow.document
+  doc.open()
+  doc.write(`<!DOCTYPE html><html><head><style>
     @page { size: 58mm auto; margin: 2mm 1mm; }
     body { font-family: 'Courier New', Courier, monospace; font-size: 11px; color: #000; width: 54mm; margin: 0; padding: 4px; }
   </style></head><body>${cupomHTML}</body></html>`)
-  pw.document.close()
+  doc.close()
 
-  pw.onload = () => {
-    pw.focus()
-    pw.print()
-    pw.onafterprint = () => pw.close()
-  }
+  iframe.contentWindow.focus()
+  iframe.contentWindow.print()
+
+  iframe.contentWindow.onafterprint = () => iframe.remove()
+  setTimeout(() => { if (iframe.parentNode) iframe.remove() }, 60000)
 }
